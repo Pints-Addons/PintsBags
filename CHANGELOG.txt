@@ -1,0 +1,10 @@
+Pint's Bags - Changelog
+
+v1.0
+- First public release.
+- All your bags in one window, grouped by kind (equipment, consumables, trade goods, quest items...) or as
+  one big bag with every slot in bag order.
+- Search by name, type, slot, quality or "bound"; sort button (uses the game's sort when it has one).
+- Optional colour for each bag, quality borders, quest item marks, item level on gear, new-item glow, fade junk.
+- The bank in its own window, with buying bank bag slots.
+- With Pint's Alts: any character's bags and bank from anywhere, and gold across the realm.
