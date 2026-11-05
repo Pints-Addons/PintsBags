@@ -1,5 +1,12 @@
 Pint's Bags - Changelog
 
+v1.1
+- Works on WoW Forever (the modern game client). Classic Era is unchanged.
+- Hides Blizzard's own combined bag so the two don't overlap.
+- The reagent bag is included, with its slot in the bag bar and in one-big-bag view.
+- Right-clicking an item to use it no longer gets blocked.
+- Bank bags follow the modern client's numbering.
+
 v1.0
 - First public release.
 - All your bags in one window, grouped by kind (equipment, consumables, trade goods, quest items...) or as

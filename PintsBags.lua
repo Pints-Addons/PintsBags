@@ -1,11 +1,27 @@
 -- Pint's Bags: all your bags in one window (and the bank in another), search, sort, colours per bag,
 -- and any character's bags and bank from anywhere (read from Pint's Alts).  /pbag
 local ADDON = ...
+-- Compatibility: WoW Forever runs on the modern game client, where these older functions moved or were renamed.
+local GetItemInfo = GetItemInfo or (C_Item and C_Item.GetItemInfo)
+local GetItemInfoInstant = GetItemInfoInstant or (C_Item and C_Item.GetItemInfoInstant)
+local GetItemIcon = GetItemIcon or (C_Item and C_Item.GetItemIconByID)
+local GetItemQualityColor = GetItemQualityColor or (C_Item and C_Item.GetItemQualityColor)
+local IsAddOnLoaded = IsAddOnLoaded or (C_AddOns and C_AddOns.IsAddOnLoaded)
+
 local PB = {}
 _G.PintsBags = PB
 
 local INV = { 0, 1, 2, 3, 4 }
 local BANK = { -1, 5, 6, 7, 8, 9, 10 }
+-- the modern client (WoW Forever) adds a reagent bag as bag 5, so the bank's bags move up one
+local REAGENT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag
+if REAGENT then
+	INV[#INV + 1] = REAGENT
+	BANK = { -1 }
+	for i = REAGENT + 1, REAGENT + 7 do BANK[#BANK + 1] = i end
+end
+local FIRST_BANK_BAG = BANK[2]
+local function IsInvBag(id) return id >= 0 and (id <= 4 or id == REAGENT) end
 local BANK_ID = BANK_CONTAINER or -1
 local DEFAULTS = {
 	columns = 10, size = 37, view = "category", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false,
@@ -113,8 +129,10 @@ local function LiveButton(bag, slot)
 	b = nb
 	b:SetID(slot)
 	b.pbBag, b.pbSlot = bag, slot
-	b.GetBagID = function() return bag end
-	b.GetSlotAndBagID = function() return slot, bag end
+	-- the button finds its bag from its parent frame's id. Never replace the game's own GetBagID: the click that
+	-- uses an item runs through it, and an add-on's version there gets "blocked from an action" on the modern client
+	if not b.GetBagID then b.GetBagID = function() return bag end end
+	if not b.GetSlotAndBagID then b.GetSlotAndBagID = function() return slot, bag end end
 	Decorate(b)
 	if bag == BANK_ID then
 		-- the main bank slots aren't a normal bag for tooltips
@@ -308,7 +326,7 @@ local function BagSlotButton(w, bag)
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
 		if bag == 0 then GameTooltip:AddLine(BACKPACK_TOOLTIP or "Backpack")
-		elseif bag == BANK_ID then GameTooltip:AddLine(BANK or "Bank")
+		elseif bag == BANK_ID then GameTooltip:AddLine(_G.BANK or "Bank")
 		elseif self.link then GameTooltip:SetHyperlink(self.link)
 		elseif not w.offline and inv and GetInventoryItemLink("player", inv) then GameTooltip:SetInventoryItem("player", inv)
 		else GameTooltip:AddLine(self.locked and "Bank slot not bought" or "Empty bag slot", 0.7, 0.7, 0.7) end
@@ -487,7 +505,7 @@ function PB.FreeTip(owner, family, w)
 	for _, bag in ipairs(w.bags) do
 		if BagFamily(bag) == family and NumSlots(bag) > 0 then
 			local free = C.GetContainerNumFreeSlots(bag) or 0
-			local name = (bag == 0 and (BACKPACK_TOOLTIP or "Backpack")) or (bag == BANK_ID and (BANK or "Bank")) or (BagName and BagName(bag)) or ("Bag " .. bag)
+			local name = (bag == 0 and (BACKPACK_TOOLTIP or "Backpack")) or (bag == BANK_ID and (_G.BANK or "Bank")) or (BagName and BagName(bag)) or ("Bag " .. bag)
 			local r, g, b = PB.BagColor(bag)
 			GameTooltip:AddDoubleLine(name, free .. " of " .. NumSlots(bag) .. " free", r, g, b, 1, 1, 1)
 		end
@@ -687,7 +705,7 @@ function PB.Refresh(w)
 			tex = link and GetItemIcon and GetItemIcon(link)
 		elseif sb.inv then tex = GetInventoryItemTexture("player", sb.inv) end
 		sb.link = offline and link or nil
-		sb.locked = (w.kind == "bank" and bag ~= BANK_ID and not offline and GetNumBankSlots and (bag - 4) > GetNumBankSlots())
+		sb.locked = (w.kind == "bank" and bag ~= BANK_ID and not offline and GetNumBankSlots and (bag - FIRST_BANK_BAG + 1) > GetNumBankSlots())
 		sb.tex:SetTexture(tex or "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
 		sb.tex:SetDesaturated(sb.locked or false); sb.tex:SetVertexColor(sb.locked and 1 or 1, sb.locked and 0.3 or 1, sb.locked and 0.3 or 1)
 		local r, g, b = PB.BagColor(bag)
@@ -767,19 +785,23 @@ local function HideBlizzardBags()
 		local f = _G["ContainerFrame" .. i]
 		if f and f:IsShown() then
 			local id = f:GetID()
-			if (db.replaceBags and id >= 0 and id <= 4) or (db.replaceBank and (id == BANK_ID or id >= 5)) then f:Hide() end
+			if (db.replaceBags and IsInvBag(id)) or (db.replaceBank and (id == BANK_ID or id >= FIRST_BANK_BAG)) then f:Hide() end
 		end
 	end
+	-- the modern client (WoW Forever) shows all your bags in one "Combined Backpack" window
+	local c = ContainerFrameCombinedBags
+	if c and c:IsShown() and db.replaceBags then c:Hide() end
 end
 local function InstallHooks()
 	for i = 1, (NUM_CONTAINER_FRAMES or 13) do
 		local f = _G["ContainerFrame" .. i]
 		if f then f:HookScript("OnShow", function() C_Timer.After(0, HideBlizzardBags) end) end
 	end
+	if ContainerFrameCombinedBags then ContainerFrameCombinedBags:HookScript("OnShow", function() C_Timer.After(0, HideBlizzardBags) end) end
 	local function T() if db.replaceBags then PB.Toggle("inv") end end
 	if ToggleBackpack then hooksecurefunc("ToggleBackpack", T) end
 	if ToggleAllBags then hooksecurefunc("ToggleAllBags", T) end
-	if ToggleBag then hooksecurefunc("ToggleBag", function(id) if db.replaceBags and id and id >= 0 and id <= 4 then PB.Toggle("inv") end end) end
+	if ToggleBag then hooksecurefunc("ToggleBag", function(id) if db.replaceBags and id and IsInvBag(id) then PB.Toggle("inv") end end) end
 	if CloseAllBags then hooksecurefunc("CloseAllBags", function() if db.replaceBags then PB.Close() end end) end
 	if OpenAllBags then hooksecurefunc("OpenAllBags", function() if db.replaceBags then PB.Open() end end) end
 	-- the bank
@@ -886,7 +908,7 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "BAG_UPDATE_DELAYED", "ITEM_LOCK_CHANGED", "BAG_UPDATE_COOLDOWN", "PLAYER_MONEY",
 	"BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED", "QUEST_ACCEPTED", "QUEST_REMOVED",
-	"UNIT_QUEST_LOG_CHANGED", "GET_ITEM_INFO_RECEIVED", "BAG_NEW_ITEMS_UPDATED", "PLAYER_REGEN_ENABLED" }) do ev:RegisterEvent(e) end
+	"UNIT_QUEST_LOG_CHANGED", "GET_ITEM_INFO_RECEIVED", "BAG_NEW_ITEMS_UPDATED", "PLAYER_REGEN_ENABLED" }) do pcall(ev.RegisterEvent, ev, e) end   -- (pcall: events this game version lacks are skipped)
 local pending = false
 local function Soon()
 	if pending then return end
