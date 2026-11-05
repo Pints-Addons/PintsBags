@@ -122,6 +122,71 @@ local function BagFrame(bag)
 	end
 	return f
 end
+-- WoW Forever: right-click to use (potions, food, anything with a use) goes through a secure overlay on each slot,
+-- the same kind of button the action bars use - so the game always lets it through, in combat too. Left-click,
+-- dragging and tooltips still reach the slot underneath.
+local pendingUse, useOff = {}, false
+-- The overlays live on a layer of their own, not inside the bag window: a secure button inside the window would make
+-- the whole window "protected", and the game then refuses to let it update or close during combat. They're lined up
+-- over the slots out of combat; when combat starts they step aside (right-click in combat uses the game's own
+-- click again - use the action bar for potions mid-fight), and come back when it ends.
+local useLayer = CreateFrame("Frame", "PintsBagsUseLayer", UIParent)
+useLayer:SetAllPoints(UIParent)
+local function Sync(b)
+	local o = b.pbUse
+	if not o or InCombatLockdown() then return end
+	if b:IsVisible() and not useOff then
+		o:ClearAllPoints(); o:SetAllPoints(b)
+		o:SetFrameStrata(b:GetFrameStrata()); o:SetFrameLevel(b:GetFrameLevel() + 5)
+		o:Show()
+	else
+		o:Hide(); o:ClearAllPoints()
+	end
+end
+local function AddUse(b, bag, slot)
+	if b.pbUse or type(issecretvalue) ~= "function" then return end
+	if InCombatLockdown() then pendingUse[b] = { bag, slot }; return end
+	local o = CreateFrame("Button", nil, useLayer, "SecureActionButtonTemplate")
+	o:Hide()
+	o:RegisterForClicks("RightButtonUp", "RightButtonDown")
+	o:SetAttribute("type2", "item")
+	o:SetAttribute("item2", bag .. " " .. slot)
+	if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "LeftButton", "MiddleButton", "Button4", "Button5") end
+	o:SetScript("OnEnter", function() local f = b:GetScript("OnEnter"); if f then f(b) end end)
+	o:SetScript("OnLeave", function() local f = b:GetScript("OnLeave"); if f then f(b) end end)
+	b.pbUse = o
+	b:HookScript("OnShow", function(self) C_Timer.After(0, function() Sync(self) end) end)
+	b:HookScript("OnHide", function(self) Sync(self) end)
+	Sync(b)
+end
+local function SyncAll() for _, b in pairs(liveButtons) do Sync(b) end end
+PB.AddPendingUse = function()
+	for b, bs in pairs(pendingUse) do pendingUse[b] = nil; AddUse(b, bs[1], bs[2]) end
+	SyncAll()
+end
+-- at a vendor, bank, mailbox, auction house or trade the game's own right-click is the one you want (sell, store,
+-- attach...), and it works there: the overlays step aside while one of those is open
+local function UseOverlays(on)
+	if InCombatLockdown() then return end
+	useOff = not on
+	SyncAll()
+end
+do
+	local uv = CreateFrame("Frame")
+	local open = { MERCHANT_SHOW = true, BANKFRAME_OPENED = true, MAIL_SHOW = true, AUCTION_HOUSE_SHOW = true, TRADE_SHOW = true,
+		GUILDBANKFRAME_OPENED = true, PLAYER_INTERACTION_MANAGER_FRAME_SHOW = true }
+	for _, e in ipairs({ "MERCHANT_SHOW", "MERCHANT_CLOSED", "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "MAIL_SHOW", "MAIL_CLOSED",
+		"AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "TRADE_SHOW", "TRADE_CLOSED", "GUILDBANKFRAME_OPENED", "GUILDBANKFRAME_CLOSED",
+		"PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "PLAYER_REGEN_DISABLED" }) do pcall(uv.RegisterEvent, uv, e) end
+	uv:SetScript("OnEvent", function(_, e)
+		if e == "PLAYER_REGEN_DISABLED" then
+			-- the last moment before combat locks things: let go of the slots, so the window stays free to update
+			for _, b in pairs(liveButtons) do if b.pbUse then b.pbUse:Hide(); b.pbUse:ClearAllPoints() end end
+			return
+		end
+		UseOverlays(not open[e])
+	end)
+end
 local function LiveButton(bag, slot)
 	local key = bag * 100 + slot
 	local b = liveButtons[key]
@@ -158,6 +223,7 @@ local function LiveButton(bag, slot)
 		end
 		if self.pbFreeFamily and self:IsShown() and self.pbWindow then PB.FreeTip(self, self.pbFreeFamily, self.pbWindow) end
 	end)
+	AddUse(b, bag, slot)
 	liveButtons[key] = b
 	return b
 end
@@ -440,7 +506,11 @@ local function MakeWindow(kind)
 	w:SetScript("OnHide", function(self)
 		PlaySound(SOUNDKIT and SOUNDKIT.IG_BACKPACK_CLOSE or 863)
 		self.viewing = nil
-		if self.kind == "bank" and PB.atBank then PB.atBank = false; CloseBankFrame() end
+		if self.kind == "bank" and PB.atBank then
+			PB.atBank = false
+			local close = CloseBankFrame or (C_Bank and C_Bank.CloseBankFrame)
+			if close then pcall(close) elseif C_PlayerInteractionManager and C_PlayerInteractionManager.ClearInteraction then pcall(C_PlayerInteractionManager.ClearInteraction) end
+		end
 		if self.kind == "inv" and C_NewItems and C_NewItems.ClearAll and db.newGlow then C_NewItems.ClearAll() end
 		if menu then menu:Hide() end
 	end)
@@ -798,6 +868,8 @@ local function StashBlizzardBags()
 	local list = {}
 	if db.replaceBags and ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
 	if all then for i = 1, (NUM_CONTAINER_FRAMES or 13) do local f = _G["ContainerFrame" .. i]; if f then list[#list + 1] = f end end end
+	-- Blizzard's bank window too (WoW Forever opens it its own way, so turning off its event doesn't stop it)
+	if db.replaceBank and BankFrame then list[#list + 1] = BankFrame end
 	for _, f in ipairs(list) do if f:IsShown() then return end end      -- only while they're all closed
 	for _, f in ipairs(list) do f:SetParent(stash) end
 	stashed = all and "all" or (#list > 0 and "combined") or false
@@ -940,7 +1012,12 @@ local function Soon()
 	pending = true
 	C_Timer.After(0.05, function() pending = false; PB.RefreshAll() end)
 end
+-- WoW Forever opens and closes the bank through the "interaction manager" (whichever of the two arrives works)
+local BANKER = Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.Banker
+if BANKER then pcall(ev.RegisterEvent, ev, "PLAYER_INTERACTION_MANAGER_FRAME_SHOW"); pcall(ev.RegisterEvent, ev, "PLAYER_INTERACTION_MANAGER_FRAME_HIDE") end
 ev:SetScript("OnEvent", function(_, e, a1)
+	if e == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then if a1 ~= BANKER or PB.atBank then return end; e = "BANKFRAME_OPENED"
+	elseif e == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" then if a1 ~= BANKER then return end; e = "BANKFRAME_CLOSED" end
 	if e == "ADDON_LOADED" and a1 == ADDON then
 		PintsBagsDB = PintsBagsDB or {}
 		db = PintsBagsDB
@@ -962,6 +1039,7 @@ ev:SetScript("OnEvent", function(_, e, a1)
 	elseif e == "BANKFRAME_CLOSED" then
 		if PB.atBank then PB.atBank = false; if windows.bank then windows.bank:Hide() end end
 	elseif e == "PLAYER_REGEN_ENABLED" then
+		if PB.AddPendingUse then PB.AddPendingUse() end
 		Soon()
 	else
 		Soon()
