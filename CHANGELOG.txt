@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.3
+- WoW Forever: right-click a potion, food or other usable item in the bags to use it (out of combat).
+- WoW Forever: no more "blocked" errors in combat when the bag window updates.
+- The bank opens in Pint's Bags; Blizzard's own bank window stays out of the way.
+
 v1.1.2
 - WoW Forever: right-clicking items to use or sell them no longer gets blocked (Blizzard's own bag windows are tucked
   away once at login instead of being closed each time).
