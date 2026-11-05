@@ -36,7 +36,7 @@ local PALETTE = {
 PB.PALETTE = PALETTE
 local db
 local SortKeyFor, SortBefore          -- set in the sorting section
-local ME, REALM = UnitName("player"), GetRealmName()
+local ME, REALM = (GetUnitName and GetUnitName("player", false) or UnitName("player")), GetRealmName()
 local function Print(m) print("|cffd4a017Pint's Bags:|r " .. m) end
 PB.Print = Print
 function PB.Tip(f, t) f:HookScript("OnEnter", function(s) GameTooltip:SetOwner(s, "ANCHOR_TOP"); GameTooltip:AddLine(t, 1, 1, 1, true); GameTooltip:Show() end); f:HookScript("OnLeave", function() GameTooltip:Hide() end) end

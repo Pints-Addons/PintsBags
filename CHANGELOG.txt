@@ -1,5 +1,9 @@
 Pint's Bags - Changelog
 
+v1.1.1
+- WoW Forever: characters are known by their full name (first and second, e.g. "Pint Waterboy"), so characters that
+  share a first name no longer share one record. Classic Era is unchanged.
+
 v1.1
 - Works on WoW Forever (the modern game client). Classic Era is unchanged.
 - Hides Blizzard's own combined bag so the two don't overlap.
