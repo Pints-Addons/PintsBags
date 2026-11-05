@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.2
+- WoW Forever: right-clicking items to use or sell them no longer gets blocked (Blizzard's own bag windows are tucked
+  away once at login instead of being closed each time).
+- WoW Forever: the reagent bag is off-white - its edge, and its empty slots get a light wash - so it stands apart.
+
 v1.1.1
 - WoW Forever: characters are known by their full name (first and second, e.g. "Pint Waterboy"), so characters that
   share a first name no longer share one record. Classic Era is unchanged.

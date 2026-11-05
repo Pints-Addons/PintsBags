@@ -33,6 +33,8 @@ local PALETTE = {
 	[-1] = { 0.85, 0.72, 0.40 }, [5] = { 0.20, 0.80, 0.80 }, [6] = { 1.00, 0.40, 0.70 }, [7] = { 0.95, 0.30, 0.30 }, [8] = { 1.00, 0.90, 0.30 },
 	[9] = { 0.60, 1.00, 0.30 }, [10] = { 0.45, 0.75, 1.00 },
 }
+-- the reagent bag (WoW Forever) only takes crafting reagents: an off-white, so it stands apart from the coloured bags
+if REAGENT then PALETTE[REAGENT] = { 0.92, 0.90, 0.82 } end
 PB.PALETTE = PALETTE
 local db
 local SortKeyFor, SortBefore          -- set in the sorting section
@@ -96,6 +98,9 @@ local function Decorate(b)
 	b.pbEdge:SetPoint("TOPLEFT", -2, 2); b.pbEdge:SetPoint("BOTTOMRIGHT", 2, -2); b.pbEdge:SetColorTexture(1, 1, 1, 1); b.pbEdge:Hide()
 	b.pbBack = b:CreateTexture(nil, "BACKGROUND", nil, -6)
 	b.pbBack:SetAllPoints(); b.pbBack:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+	-- empty reagent-bag slots (WoW Forever) get a light off-white wash, so you can see at a glance where reagents go
+	b.pbTint = b:CreateTexture(nil, "BACKGROUND", nil, -5)
+	b.pbTint:SetAllPoints(); b.pbTint:SetColorTexture(0.92, 0.90, 0.82, 0.38); b.pbTint:Hide()
 	b.pbGlow = b:CreateTexture(nil, "OVERLAY", nil, 1)
 	b.pbGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border"); b.pbGlow:SetBlendMode("ADD")
 	b.pbGlow:SetPoint("CENTER"); b.pbGlow:SetSize(size * 1.8, size * 1.8); b.pbGlow:Hide()
@@ -182,7 +187,7 @@ local function Paint(b, bag, d, search)
 		quality = d.quality or quality
 		if icon then icon:SetTexture(d.texture or tex or GetItemIcon and GetItemIcon(d.link)); icon:Show() end
 		if SetItemButtonCount then SetItemButtonCount(b, d.count or 1) elseif count then count:SetText((d.count or 1) > 1 and d.count or "") end
-		b.pbBack:Hide()
+		b.pbBack:Hide(); if b.pbTint then b.pbTint:Hide() end
 		-- quality border
 		if db.quality and quality and quality >= 2 then
 			local r, g, bl = GetItemQualityColor(quality)
@@ -203,13 +208,14 @@ local function Paint(b, bag, d, search)
 		if icon then icon:SetTexture(nil); icon:Hide() end
 		if SetItemButtonCount then SetItemButtonCount(b, 0) elseif count then count:SetText("") end
 		b.pbBack:Show(); b.pbGlow:Hide(); b.pbQuest:Hide(); b.pbNew:Hide(); b.pbLevel:SetText("")
+		if b.pbTint then b.pbTint:SetShown(REAGENT ~= nil and bag == REAGENT) end
 		b:SetAlpha((search and search ~= "") and 0.3 or 1)
 	end
 	-- the slot frame: the game's own (blue) border in the grouped view; in the one big bag it goes,
 	-- and a light edge in each bag's colour shows where one bag ends and the next begins
 	local nt = b.GetNormalTexture and b:GetNormalTexture()
 	-- every other piece of the game's slot art (whatever this client draws round the icon) follows the same rule
-	local mine = { [b.pbEdge] = true, [b.pbBack] = true, [b.pbGlow] = true, [b.pbQuest] = true, [b.pbNew] = true, [icon or 0] = true, [b.IconBorder or 0] = true }
+	local mine = { [b.pbEdge] = true, [b.pbBack] = true, [b.pbTint or 0] = true, [b.pbGlow] = true, [b.pbQuest] = true, [b.pbNew] = true, [icon or 0] = true, [b.IconBorder or 0] = true }
 	local plain = db.view ~= "category"
 	for _, r in ipairs({ b:GetRegions() }) do
 		if r.GetTexture and not mine[r] and r ~= (b.GetHighlightTexture and b:GetHighlightTexture()) and r ~= (b.GetPushedTexture and b:GetPushedTexture()) then
@@ -780,7 +786,25 @@ function PB.Toggle(kind)
 end
 function PB.Open() local w = PB.Window("inv"); if not w:IsShown() then w.viewing = nil; w:Show() end end
 function PB.Close() if windows.inv then windows.inv:Hide() end end
+-- WoW Forever: hiding Blizzard's bag windows from an add-on runs their close-up code as the add-on, and what that
+-- code writes then blocks right-clicking items to use them ("PintsBags tried to call UseContainerItem").
+-- So there, while they're closed at login, they're moved into a hidden holder instead: the game can still open and
+-- close them as it likes, nothing of theirs ever shows, and Pint's Bags never has to hide them.
+local stash = CreateFrame("Frame"); stash:Hide()
+local stashed = false
+local function StashBlizzardBags()
+	if stashed or type(issecretvalue) ~= "function" or InCombatLockdown() then return end
+	local all = db.replaceBags and db.replaceBank
+	local list = {}
+	if db.replaceBags and ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
+	if all then for i = 1, (NUM_CONTAINER_FRAMES or 13) do local f = _G["ContainerFrame" .. i]; if f then list[#list + 1] = f end end end
+	for _, f in ipairs(list) do if f:IsShown() then return end end      -- only while they're all closed
+	for _, f in ipairs(list) do f:SetParent(stash) end
+	stashed = all and "all" or (#list > 0 and "combined") or false
+end
+PB.StashBlizzardBags = StashBlizzardBags
 local function HideBlizzardBags()
+	if stashed == "all" then return end
 	for i = 1, (NUM_CONTAINER_FRAMES or 13) do
 		local f = _G["ContainerFrame" .. i]
 		if f and f:IsShown() then
@@ -790,9 +814,10 @@ local function HideBlizzardBags()
 	end
 	-- the modern client (WoW Forever) shows all your bags in one "Combined Backpack" window
 	local c = ContainerFrameCombinedBags
-	if c and c:IsShown() and db.replaceBags then c:Hide() end
+	if c and c:IsShown() and db.replaceBags and not stashed then c:Hide() end
 end
 local function InstallHooks()
+	StashBlizzardBags()
 	for i = 1, (NUM_CONTAINER_FRAMES or 13) do
 		local f = _G["ContainerFrame" .. i]
 		if f then f:HookScript("OnShow", function() C_Timer.After(0, HideBlizzardBags) end) end
