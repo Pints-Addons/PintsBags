@@ -1,5 +1,21 @@
 Pint's Bags - Changelog
 
+v1.1.10
+- WoW Forever: right-click items in a fight even when you open your bags mid-fight. Your bag key and the minimap /
+  Button Bin button open the bags through a secure toggle, and when a fight starts the use buttons are set over every
+  slot, bags open or closed. In a fight, close the bags with the bag key, the minimap button or the X (Escape waits
+  until the fight ends). Right-click the minimap button for options as before.
+- Fixed right-click sometimes not using items after clicking on the bag window (the window came to the front, over
+  the buttons that use items).
+- WoW Forever bank: buy bank bag slots by clicking the next locked slot - the game's own "buy this slot" box comes up
+  (the click is passed to the game's own purchase button, the only thing the game lets buy). The price shows after
+  the slots. Put bags in and take them out of the bank's bag slots.
+- WoW Forever: two currency spots on the bottom edge, spaced evenly between the free-slot count and the gold -
+  Merchant's Favor and Honor Points to start. Hover either for every character's amount and the account total; click
+  one to show a different currency there (or leave it empty).
+- Junk mark: a small coin in the top-right corner of grey items and anything on Pint's Junk's quick list (a red cross
+  for items it's set to destroy).
+
 v1.1.6
 - WoW Forever: right-click potions and other usable items in the bags during a fight. Have your bags open when the
   fight starts: until it ends the bag window holds still (no moving or rearranging) and stays open, so right-click
