@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.6
+- WoW Forever: right-click potions and other usable items in the bags during a fight. Have your bags open when the
+  fight starts: until it ends the bag window holds still (no moving or rearranging) and stays open, so right-click
+  always uses the item you clicked. Bags opened mid-fight can't use items until it ends.
+
 v1.1.5
 - WoW Forever: right-click to use items (potions, Fire Sapta and so on) no longer stops working after you talk to an NPC.
 - WoW Forever: in combat, right-clicking a bag slot does nothing instead of showing a "blocked" error (use the action bar

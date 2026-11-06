@@ -140,9 +140,10 @@ end
 -- dragging and tooltips still reach the slot underneath.
 local pendingUse, useOff = {}, false
 -- The overlays live on a layer of their own, not inside the bag window: a secure button inside the window would make
--- the whole window "protected", and the game then refuses to let it update or close during combat. They're lined up
--- over the slots out of combat; when combat starts they step aside (right-click in combat uses the game's own
--- click again - use the action bar for potions mid-fight), and come back when it ends.
+-- the whole window "protected", and the game then refuses to let it update or close during combat. Out of combat they
+-- follow their slots. When a fight starts with your bags open, each one is pinned to the spot its slot is on, and the
+-- bag window holds still until the fight ends (no rearranging, moving or closing), so every pinned button stays over
+-- its own item and right-click keeps using potions mid-fight. Bags opened during a fight don't get them.
 local useLayer = CreateFrame("Frame", "PintsBagsUseLayer", UIParent)
 useLayer:SetAllPoints(UIParent)
 local function Sync(b)
@@ -171,7 +172,7 @@ local function AddUse(b, bag, slot)
 	b:HookScript("OnMouseUp", function(_, btn)
 		if btn == "RightButton" and InCombatLockdown() and not PB.combatNote then
 			PB.combatNote = true
-			Print("in combat, right-click in the bags is off - use a potion from your action bar. It works again when the fight ends.")
+			Print("to use items from the bags in a fight, have them open before it starts. Bags opened mid-fight can't use items until it ends.")
 		end
 	end)
 	b:HookScript("OnShow", function(self) C_Timer.After(0, function() Sync(self) end) end)
@@ -186,6 +187,7 @@ end
 -- at a vendor, bank, mailbox, auction house or trade the game's own right-click is the one you want (sell, store,
 -- attach...), and it works there: the overlays step aside while one of those is open
 local function UseOverlays(on)
+	if PB.testClick then on = false end         -- (/pbag testclick: the slots get the click themselves)
 	useOff = not on                      -- (remembered even in combat, so a window closed mid-fight doesn't leave them off)
 	if InCombatLockdown() then return end
 	SyncAll()
@@ -203,13 +205,25 @@ do
 		"PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "PLAYER_REGEN_DISABLED" }) do pcall(uv.RegisterEvent, uv, e) end
 	uv:SetScript("OnEvent", function(_, e, a1)
 		if e == "PLAYER_REGEN_DISABLED" then
-			-- the last moment before combat locks things: let go of the slots, so the window stays free to update
+			-- the last moment before combat locks things: pin each use button to where its slot is right now (not to the
+			-- slot itself, so the window stays free), and keep the window still until the fight is over
+			PB.fightLock = false
+			local ls = useLayer:GetEffectiveScale()
 			for _, b in pairs(liveButtons) do
 				if b.pbUse then
-					b.pbUse:Hide(); b.pbUse:ClearAllPoints()
-					-- and the slot itself ignores right-clicks until combat ends: the game's own right-click from an
-					-- add-on's bag gets "blocked" mid-fight (use the action bar for potions in combat)
+					local o = b.pbUse
+					-- the slot itself ignores right-clicks until combat ends (the game's own right-click from an add-on's bag is blocked)
 					b:RegisterForClicks("LeftButtonUp")
+					local l, bt = b:GetLeft(), b:GetBottom()
+					if b:IsVisible() and not useOff and not PB.testClick and l and bt then
+						local sc = b:GetEffectiveScale() / ls
+						o:ClearAllPoints(); o:SetPoint("BOTTOMLEFT", useLayer, "BOTTOMLEFT", l * sc, bt * sc)
+						o:SetSize(b:GetWidth() * sc, b:GetHeight() * sc)
+						o:SetFrameStrata(b:GetFrameStrata()); o:SetFrameLevel(b:GetFrameLevel() + 5); o:Show()
+						PB.fightLock = true
+					else
+						o:Hide(); o:ClearAllPoints()
+					end
 				end
 			end
 			return
@@ -452,7 +466,7 @@ local function MakeWindow(kind)
 	w:SetMovable(true); w:EnableMouse(true); w:RegisterForDrag("LeftButton")
 	w:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = true, tileSize = 16, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
 	w:SetBackdropColor(0.05, 0.05, 0.05, 0.92); w:SetBackdropBorderColor(0.55, 0.55, 0.55, 1)
-	w:SetScript("OnDragStart", function(self) if not db.locked then self:StartMoving() end end)
+	w:SetScript("OnDragStart", function(self) if not db.locked and not (PB.fightLock and InCombatLockdown()) then self:StartMoving() end end)
 	w:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); SavePos(self) end)
 	w:Hide()
 	tinsert(UISpecialFrames, w:GetName())
@@ -536,6 +550,12 @@ local function MakeWindow(kind)
 
 	w:SetScript("OnShow", function(self) PlaySound(SOUNDKIT and SOUNDKIT.IG_BACKPACK_OPEN or 862); PB.Refresh(self) end)
 	w:SetScript("OnHide", function(self)
+		if self.kind == "inv" and PB.fightLock and InCombatLockdown() then
+			-- the pinned use buttons can't be taken away mid-fight, so the bags stay open until it's over
+			C_Timer.After(0, function() if PB.fightLock and InCombatLockdown() then self:Show() end end)
+			if not PB.lockNote then PB.lockNote = true; Print("your bags stay open until the fight ends (so right-click keeps using the right item).") end
+			return
+		end
 		PlaySound(SOUNDKIT and SOUNDKIT.IG_BACKPACK_CLOSE or 863)
 		self.viewing = nil
 		if self.kind == "bank" and PB.atBank then
@@ -787,6 +807,14 @@ end
 
 function PB.Refresh(w)
 	if not w or not w:IsShown() or not db then return end
+	if PB.fightLock and InCombatLockdown() then
+		-- mid-fight with pinned use buttons: nothing moves - just repaint what's in each slot; the full update waits for the end
+		for _, b in pairs(liveButtons) do
+			if b.pbWindow == w and b:IsVisible() and not w.offline then Paint(b, b.pbBag, LiveData(b.pbBag, b.pbSlot), PB.searchText); Cooldown(b, b.pbBag, b.pbSlot) end
+		end
+		w.money.t:SetText(Money(GetMoney()))
+		return
+	end
 	w:SetScale(db.scale)
 	local search = PB.searchText
 	local offline = w.viewing and (w.viewing ~= ME or (w.kind == "bank" and not PB.atBank)) and true or false
@@ -1075,6 +1103,7 @@ ev:SetScript("OnEvent", function(_, e, a1)
 	elseif e == "BANKFRAME_CLOSED" then
 		if PB.atBank then PB.atBank = false; if windows.bank then windows.bank:Hide() end end
 	elseif e == "PLAYER_REGEN_ENABLED" then
+		PB.fightLock = false
 		for _, b in pairs(liveButtons) do if b.pbUse then b:RegisterForClicks("LeftButtonUp", "RightButtonUp") end end
 		if PB.AddPendingUse then PB.AddPendingUse() end
 		Soon()
@@ -1099,6 +1128,15 @@ SlashCmdList.PINTSBAGS = function(msg)
 	elseif msg == "bank" then local b = PB.Window("bank"); b.viewing = b.viewing or ME; b:Show()
 	elseif msg == "sort" then PB.Sort(PB.Window("inv"))
 	elseif msg == "minimap" then PB.ToggleMinimap()
+	elseif msg == "testclick" then
+		-- temporary test: turn the right-click "use" buttons off so a right-click reaches the slot itself, to find out
+		-- (with /console taintLog 2) what makes the game block it. /pbag testclick again to turn them back on.
+		if InCombatLockdown() then Print("after combat."); return end
+		PB.testClick = not PB.testClick
+		useOff = PB.testClick and true or false
+		for _, b in pairs(liveButtons) do b:RegisterForClicks("LeftButtonUp", "RightButtonUp"); if b.pbUse then b.pbUse:Hide() end end
+		SyncAll()
+		Print(PB.testClick and "test on: right-click now goes to the slot itself. Right-click an item until it's blocked, then tell Claude (no /reload)." or "test off: right-click to use is back to normal.")
 	elseif msg == "diag" then
 		local w = windows.inv
 		if not w then Print("open your bags first."); return end
