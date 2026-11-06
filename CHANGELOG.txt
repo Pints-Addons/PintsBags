@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.5
+- WoW Forever: right-click to use items (potions, Fire Sapta and so on) no longer stops working after you talk to an NPC.
+- WoW Forever: in combat, right-clicking a bag slot does nothing instead of showing a "blocked" error (use the action bar
+  mid-fight for now).
+
 v1.1.4
 - WoW Forever: the bank now shows your bank tabs (the 48-slot tabs you buy at the banker). Before, it showed the keyring
   and said the bank was full.

@@ -168,6 +168,12 @@ local function AddUse(b, bag, slot)
 	o:SetScript("OnEnter", function() local f = b:GetScript("OnEnter"); if f then f(b) end end)
 	o:SetScript("OnLeave", function() local f = b:GetScript("OnLeave"); if f then f(b) end end)
 	b.pbUse = o
+	b:HookScript("OnMouseUp", function(_, btn)
+		if btn == "RightButton" and InCombatLockdown() and not PB.combatNote then
+			PB.combatNote = true
+			Print("in combat, right-click in the bags is off - use a potion from your action bar. It works again when the fight ends.")
+		end
+	end)
 	b:HookScript("OnShow", function(self) C_Timer.After(0, function() Sync(self) end) end)
 	b:HookScript("OnHide", function(self) Sync(self) end)
 	Sync(b)
@@ -180,10 +186,14 @@ end
 -- at a vendor, bank, mailbox, auction house or trade the game's own right-click is the one you want (sell, store,
 -- attach...), and it works there: the overlays step aside while one of those is open
 local function UseOverlays(on)
+	useOff = not on                      -- (remembered even in combat, so a window closed mid-fight doesn't leave them off)
 	if InCombatLockdown() then return end
-	useOff = not on
 	SyncAll()
 end
+-- the windows where the game's own right-click is wanted; other interactions (talking to a quest giver, say) leave them on
+local PIT = Enum and Enum.PlayerInteractionType
+local STEP_ASIDE = {}
+if PIT then for _, k in ipairs({ "Merchant", "Banker", "MailInfo", "Auctioneer", "GuildBanker", "TradePartner", "AccountBanker" }) do if PIT[k] then STEP_ASIDE[PIT[k]] = true end end end
 do
 	local uv = CreateFrame("Frame")
 	local open = { MERCHANT_SHOW = true, BANKFRAME_OPENED = true, MAIL_SHOW = true, AUCTION_HOUSE_SHOW = true, TRADE_SHOW = true,
@@ -191,12 +201,20 @@ do
 	for _, e in ipairs({ "MERCHANT_SHOW", "MERCHANT_CLOSED", "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "MAIL_SHOW", "MAIL_CLOSED",
 		"AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "TRADE_SHOW", "TRADE_CLOSED", "GUILDBANKFRAME_OPENED", "GUILDBANKFRAME_CLOSED",
 		"PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "PLAYER_REGEN_DISABLED" }) do pcall(uv.RegisterEvent, uv, e) end
-	uv:SetScript("OnEvent", function(_, e)
+	uv:SetScript("OnEvent", function(_, e, a1)
 		if e == "PLAYER_REGEN_DISABLED" then
 			-- the last moment before combat locks things: let go of the slots, so the window stays free to update
-			for _, b in pairs(liveButtons) do if b.pbUse then b.pbUse:Hide(); b.pbUse:ClearAllPoints() end end
+			for _, b in pairs(liveButtons) do
+				if b.pbUse then
+					b.pbUse:Hide(); b.pbUse:ClearAllPoints()
+					-- and the slot itself ignores right-clicks until combat ends: the game's own right-click from an
+					-- add-on's bag gets "blocked" mid-fight (use the action bar for potions in combat)
+					b:RegisterForClicks("LeftButtonUp")
+				end
+			end
 			return
 		end
+		if (e == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" or e == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE") and PIT and not STEP_ASIDE[a1] then return end
 		UseOverlays(not open[e])
 	end)
 end
@@ -1057,6 +1075,7 @@ ev:SetScript("OnEvent", function(_, e, a1)
 	elseif e == "BANKFRAME_CLOSED" then
 		if PB.atBank then PB.atBank = false; if windows.bank then windows.bank:Hide() end end
 	elseif e == "PLAYER_REGEN_ENABLED" then
+		for _, b in pairs(liveButtons) do if b.pbUse then b:RegisterForClicks("LeftButtonUp", "RightButtonUp") end end
 		if PB.AddPendingUse then PB.AddPendingUse() end
 		Soon()
 	else
