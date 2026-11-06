@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.4
+- WoW Forever: the bank now shows your bank tabs (the 48-slot tabs you buy at the banker). Before, it showed the keyring
+  and said the bank was full.
+- WoW Forever: until you've bought your first bank tab, the game's own bank window opens so you can buy one.
+
 v1.1.3
 - WoW Forever: right-click a potion, food or other usable item in the bags to use it (out of combat).
 - WoW Forever: no more "blocked" errors in combat when the bag window updates.

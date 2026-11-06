@@ -20,9 +20,22 @@ if REAGENT then
 	BANK = { -1 }
 	for i = REAGENT + 1, REAGENT + 7 do BANK[#BANK + 1] = i end
 end
-local FIRST_BANK_BAG = BANK[2]
+-- WoW Forever's bank is made of tabs you buy at the banker (bags 6-14); there's no old 28-slot bank (bag -1 is the keyring)
+local TABS = Enum and Enum.BagIndex and Enum.BagIndex.CharacterBankTab_1
+if TABS then
+	BANK = {}
+	for i = 1, 9 do local id = Enum.BagIndex["CharacterBankTab_" .. i]; if id then BANK[#BANK + 1] = id end end
+end
+local FIRST_BANK_BAG = TABS and BANK[1] or BANK[2]
 local function IsInvBag(id) return id >= 0 and (id <= 4 or id == REAGENT) end
-local BANK_ID = BANK_CONTAINER or -1
+local BANK_ID = TABS and -999 or (BANK_CONTAINER or -1)
+-- no bank tab bought yet: the game's own bank window is the one with the "buy a tab" button, so it's left to do the job
+local function NoBankTabs()
+	if not (TABS and C_Bank and C_Bank.FetchNumPurchasedBankTabs) then return false end
+	local ok, n = pcall(C_Bank.FetchNumPurchasedBankTabs, (Enum.BankType and Enum.BankType.Character) or 0)
+	return ok and (n or 0) == 0
+end
+PB.NoBankTabs = NoBankTabs
 local DEFAULTS = {
 	columns = 10, size = 37, view = "category", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false,
 	bagColors = false, colorStrength = 0.9, colors = {}, bagBar = false, replaceBags = true, replaceBank = true, gameSort = true,
@@ -389,7 +402,8 @@ local function BagSlotButton(w, bag)
 	b.edge = b:CreateTexture(nil, "BACKGROUND"); b.edge:SetPoint("TOPLEFT", -2, 2); b.edge:SetPoint("BOTTOMRIGHT", 2, -2)
 	b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	b:RegisterForDrag("LeftButton")
-	local inv = (bag ~= 0 and bag ~= BANK_ID) and C.ContainerIDToInventoryID and C.ContainerIDToInventoryID(bag)
+	local inv = (bag ~= 0 and bag ~= BANK_ID) and C.ContainerIDToInventoryID and select(2, pcall(C.ContainerIDToInventoryID, bag))
+	if type(inv) ~= "number" then inv = nil end
 	b.inv, b.bag = inv, bag
 	local function put() if inv and CursorHasItem() then PutItemInBag(inv) end end
 	b:SetScript("OnClick", function() if not w.offline and inv then if CursorHasItem() then PutItemInBag(inv) else PickupBagFromSlot(inv) end end end)
@@ -869,7 +883,7 @@ local function StashBlizzardBags()
 	if db.replaceBags and ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
 	if all then for i = 1, (NUM_CONTAINER_FRAMES or 13) do local f = _G["ContainerFrame" .. i]; if f then list[#list + 1] = f end end end
 	-- Blizzard's bank window too (WoW Forever opens it its own way, so turning off its event doesn't stop it)
-	if db.replaceBank and BankFrame then list[#list + 1] = BankFrame end
+	if db.replaceBank and BankFrame and not NoBankTabs() then list[#list + 1] = BankFrame end
 	for _, f in ipairs(list) do if f:IsShown() then return end end      -- only while they're all closed
 	for _, f in ipairs(list) do f:SetParent(stash) end
 	stashed = all and "all" or (#list > 0 and "combined") or false
@@ -902,7 +916,7 @@ local function InstallHooks()
 	if CloseAllBags then hooksecurefunc("CloseAllBags", function() if db.replaceBags then PB.Close() end end) end
 	if OpenAllBags then hooksecurefunc("OpenAllBags", function() if db.replaceBags then PB.Open() end end) end
 	-- the bank
-	if db.replaceBank and BankFrame then BankFrame:UnregisterEvent("BANKFRAME_OPENED") end
+	if db.replaceBank and BankFrame and not NoBankTabs() then BankFrame:UnregisterEvent("BANKFRAME_OPENED") end
 end
 
 ---------------------------------------------------------------- sorting
@@ -1033,6 +1047,10 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		for _, bag in ipairs(INV) do RepaintBag(bag) end
 	elseif e == "BANKFRAME_OPENED" then
 		if not db.replaceBank then return end
+		if NoBankTabs() then
+			if not PB.tabNote then PB.tabNote = true; Print("you haven't bought a bank tab yet - buy one in the bank window, then /reload and Pint's Bags will show your bank.") end
+			return
+		end
 		PB.atBank = true
 		local b = PB.Window("bank"); b.viewing = nil; b:Show(); PB.Refresh(b)
 		PB.Open()
