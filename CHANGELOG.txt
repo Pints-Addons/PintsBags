@@ -1,5 +1,9 @@
 Pint's Bags - Changelog
 
+v1.1.12
+- WoW Forever: the bag opener on the minimap button now hides along with it (e.g. when Pint's Button Bin closes
+  during a fight), so it no longer leaves an invisible clickable spot behind.
+
 v1.1.11
 - Smarter sort: the sort button now groups items by what they're for - potions, bandages, scrolls, cooking (food with its
   ingredients), cloth, leather, ore/bars/stone, herbs, gems, elemental, enchanting, engineering parts, other trade goods,

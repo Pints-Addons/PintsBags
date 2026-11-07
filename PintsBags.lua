@@ -1934,7 +1934,7 @@ do
 		local target = (btn and btn.lib and btn.lib.GetMinimapButton and btn.lib:GetMinimapButton(NAME)) or (btn and not btn.lib and btn) or _G["LibDBIcon10_" .. NAME]
 		local pack = GameBackpackButton()
 		if not target or not pack then return end
-		opener = CreateFrame("Button", "PintsBagsSecureOpener", UIParent, "SecureActionButtonTemplate")
+		opener = CreateFrame("Button", "PintsBagsSecureOpener", target, "SecureActionButtonTemplate")   -- (on the button: hidden with it, e.g. when the Button Bin closes in a fight)
 		opener:SetAllPoints(target)
 		opener:SetFrameStrata(target:GetFrameStrata()); opener:SetFrameLevel(target:GetFrameLevel() + 5)
 		opener:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
