@@ -63,7 +63,7 @@ local function BuyBankTab()
 end
 local DEFAULTS = {
 	columns = 10, size = 37, view = "category", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false,
-	bagColors = false, colorStrength = 0.9, colors = {}, bagBar = false, replaceBags = true, replaceBank = true, gameSort = true,
+	bagColors = false, colorStrength = 0.9, colors = {}, bagBar = false, replaceBags = true, replaceBank = true, gameSort = false,
 	locked = false, pos = {}, minimap = {}, curSlots = {},
 }
 local PALETTE = {
@@ -439,7 +439,7 @@ do
 				return
 			end
 			-- bags closed? lay them out anyway (out of sight), so the use buttons can wait in place for when they're opened
-			local inv = windows.inv
+			local inv = PB.windows and PB.windows.inv     -- (PB.windows: the windows table is made further down the file)
 			if inv and not inv:IsShown() and not inv.offline and PB.toggleBtn then pcall(PB.Refresh, inv, true) end
 			local ls = useLayer:GetEffectiveScale()
 			for _, b in pairs(liveButtons) do
@@ -1134,7 +1134,8 @@ end
 
 function PB.Refresh(w, force)
 	if not w or (not w:IsShown() and not force) or not db then return end
-	if PB.fightLock and InCombatLockdown() then
+	-- (in a fight the window can be locked by the game - its secure parts - even without pinned use buttons: then only repaint)
+	if InCombatLockdown() and (PB.fightLock or w:IsProtected()) then
 		-- mid-fight with pinned use buttons: nothing moves - just repaint what's in each slot; the full update waits for the end
 		for _, b in pairs(liveButtons) do
 			if b.pbWindow == w and b:IsVisible() and not w.offline then Paint(b, b.pbBag, LiveData(b.pbBag, b.pbSlot), PB.searchText); Cooldown(b, b.pbBag, b.pbSlot) end
@@ -1603,17 +1604,79 @@ local function InstallHooks()
 end
 
 ---------------------------------------------------------------- sorting
--- order: Hearthstone, then by kind (consumables, gear, trade goods, ...), quality (best first), item level, name; junk last
-local CLASS_ORDER = { [0] = 1, [2] = 2, [4] = 3, [7] = 4, [5] = 5, [9] = 6, [1] = 7, [11] = 8, [6] = 9, [3] = 10, [15] = 11, [12] = 12, [13] = 13 }
+-- order: Hearthstone and tools, then by purpose - what the item is FOR - so things used together sit together:
+-- potions, bandages, scrolls, cooking (food and its ingredients), cloth, leather, ore/bars/stone, herbs, gems,
+-- elemental, enchanting, engineering parts, other trade goods, reagents, quest items, recipes, gear, bags, ammo,
+-- keys, everything else; within a group by kind, quality (best first), item level, name; junk last
+local function Has(name, list) for _, w in ipairs(list) do if name:find(w) then return true end end end
+local CLOTH = { "Cloth$", "^Bolt of", "Runecloth", "Mageweave", "Felcloth", "Mooncloth" }
+local LEATHER = { "Leather$", "Hide$", "Scraps$", "Scale$", "Scales$", "^Thick ", "^Rugged " }
+local ORE = { " Ore$" }
+local BAR = { " Bar$", "Nugget$" }
+local STONE = { "^Rough Stone$", "^Coarse Stone$", "^Heavy Stone$", "^Solid Stone$", "^Dense Stone$" }
+local HERB = { "Peacebloom", "Silverleaf", "Earthroot", "Mageroyal", "Briarthorn", "Stranglekelp", "Bruiseweed", "Steelbloom",
+	"Grave Moss", "Kingsblood", "Liferoot", "Fadeleaf", "Goldthorn", "Khadgar's Whisker", "Wintersbite", "Firebloom", "Purple Lotus",
+	"Arthas' Tears", "Sungrass", "Blindweed", "Ghost Mushroom", "Gromsblood", "Golden Sansam", "Dreamfoil", "Silversage",
+	"Plaguebloom", "Icecap", "Black Lotus", "Swiftthistle", "Wildvine", "Bloodthistle" }
+local GEM = { "Malachite", "Tigerseye", "Shadowgem", "Moss Agate", "Moonstone", "^Jade$", "Citrine", "Aquamarine", "Star Ruby",
+	"Sapphire", "Large Opal", "Huge Emerald", "Azerothian Diamond", "Black Diamond", "Arcane Crystal", "Pearl$", "Amethyst" }
+local ELEMENTAL = { "^Elemental ", "^Essence of ", "^Heart of Fire", "^Breath of Wind", "^Core of Earth", "^Globe of Water",
+	"^Ichor of Undeath", "^Living Essence", "^Elemental Earth", "^Elemental Fire", "^Elemental Water", "^Elemental Air" }
+local ENCHANT = { " Dust$", " Essence$", " Shard$", "^Nexus Crystal" }
+local CONS_RANK = { [1] = 1, [2] = 2, [3] = 2, [7] = 4, [4] = 5, [6] = 6, [0] = 7, [8] = 7 }   -- potions, elixirs/flasks, bandages, scrolls, enhancements
+local GEAR_RANK = { INVTYPE_WEAPON = 1, INVTYPE_2HWEAPON = 1, INVTYPE_WEAPONMAINHAND = 1, INVTYPE_WEAPONOFFHAND = 2, INVTYPE_SHIELD = 2,
+	INVTYPE_HOLDABLE = 2, INVTYPE_RANGED = 3, INVTYPE_RANGEDRIGHT = 3, INVTYPE_THROWN = 3, INVTYPE_RELIC = 3, INVTYPE_HEAD = 4,
+	INVTYPE_NECK = 5, INVTYPE_SHOULDER = 6, INVTYPE_CLOAK = 7, INVTYPE_CHEST = 8, INVTYPE_ROBE = 8, INVTYPE_BODY = 9, INVTYPE_TABARD = 9,
+	INVTYPE_WRIST = 10, INVTYPE_HAND = 11, INVTYPE_WAIST = 12, INVTYPE_LEGS = 13, INVTYPE_FEET = 14, INVTYPE_FINGER = 15, INVTYPE_TRINKET = 16 }
+-- returns the purpose group and a rank inside it
+local function Purpose(id, name, cls, sub, loc)
+	if id == 6948 then return 1, 0 end
+	if PROF_TOOLS[id] or (cls == 2 and sub == 20) then return 2, 0 end
+	if cls == 0 then
+		if sub == 5 then return 6, 1 end                        -- food and drink: with the cooking
+		local r = CONS_RANK[sub] or 7
+		return (r <= 2 and 3) or (r == 4 and 4) or 5, r
+	end
+	if cls == 3 then return 11, 0 end
+	if cls == 12 then return 17, 0 end
+	if cls == 9 then return 18, sub or 0 end
+	if cls == 2 or cls == 4 then return 19, GEAR_RANK[loc or ""] or 17 end
+	if cls == 1 then return 20, 0 end
+	if cls == 6 or cls == 11 then return 21, 0 end
+	if cls == 13 then return 22, 0 end
+	-- trade goods (and misc. items that are really trade goods): by the game's sub-kind, then by name
+	if IsCooking(id, cls, sub) then return 6, 2 end
+	if cls == 7 then
+		if sub == 5 then return 7, 0 elseif sub == 6 then return 8, 0 elseif sub == 9 then return 10, 0 elseif sub == 4 then return 11, 0
+		elseif sub == 10 then return 12, 0 elseif sub == 12 then return 13, 0 elseif sub == 1 or sub == 2 or sub == 3 then return 14, sub end
+	end
+	if name ~= "" and (cls == 7 or cls == 15 or cls == 5 or cls == nil) then
+		if Has(name, CLOTH) then return 7, 0 end
+		if Has(name, LEATHER) then return 8, 0 end
+		if Has(name, ORE) then return 9, 1 end
+		if Has(name, BAR) then return 9, 2 end
+		if Has(name, STONE) then return 9, 3 end
+		if Has(name, HERB) then return 10, 0 end
+		if Has(name, GEM) then return 11, 0 end
+		if Has(name, ELEMENTAL) then return 12, 0 end
+		if Has(name, ENCHANT) then return 13, 0 end
+	end
+	if cls == 7 and sub == 7 then return 9, 3 end              -- metal and stone the names didn't place
+	if cls == 7 then return 15, sub or 0 end
+	if cls == 5 then return 16, 0 end
+	return 23, cls or 99
+end
+PB.Purpose = Purpose
 local function SortKey(link, count)
 	local id = tonumber(link:match("item:(%d+)")) or 0
 	local name, _, quality, level, _, _, _, _, loc = GetItemInfo(link)
 	local _, _, _, _, _, classID, subID = GetItemInfoInstant(link)
-	return { first = (id == 6948) and 0 or 1, junk = (quality == 0) and 1 or 0, class = CLASS_ORDER[classID or 15] or 14, sub = subID or 0, loc = loc or "",
+	local p, pr = Purpose(id, name or "", classID, subID, loc)
+	return { first = (id == 6948) and 0 or 1, junk = (quality == 0) and 1 or 0, p = p, pr = pr, sub = subID or 0, loc = loc or "",
 		q = -(quality or 1), lvl = -(level or 0), name = name or link, id = id, link = link, count = -(count or 1) }
 end
 local function Before(a, b)
-	for _, f in ipairs({ "first", "junk", "class", "sub", "loc", "q", "lvl", "name", "id", "link", "count" }) do
+	for _, f in ipairs({ "first", "junk", "p", "pr", "sub", "loc", "q", "lvl", "name", "id", "link", "count" }) do
 		if a[f] ~= b[f] then return a[f] < b[f] end
 	end
 	return false
@@ -1720,6 +1783,8 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		PintsBagsDB = PintsBagsDB or {}
 		db = PintsBagsDB
 		for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = (type(v) == "table") and {} or v end end
+		-- 1.1.11: the sort by purpose is new and better than the game's, so it takes over once (the option can switch back)
+		if not db.purposeSort then db.purposeSort = true; db.gameSort = false end
 		PB.db = db
 	elseif e == "PLAYER_LOGIN" then
 		InstallHooks()

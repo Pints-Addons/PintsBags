@@ -1,5 +1,13 @@
 Pint's Bags - Changelog
 
+v1.1.11
+- Smarter sort: the sort button now groups items by what they're for - potions, bandages, scrolls, cooking (food with its
+  ingredients), cloth, leather, ore/bars/stone, herbs, gems, elemental, enchanting, engineering parts, other trade goods,
+  reagents, quest items, recipes, gear (by slot), bags, ammo, keys - then by quality and level, junk last. The game's
+  own sort (which only puts like items together) is now off by default; "Use the game's sort" in options brings it back.
+- WoW Forever: fixed an error when a fight started ("windows" a nil value), which then caused "blocked" errors
+  (SetScale, Hide) as the bags updated mid-fight. In a fight the bags now only repaint until it ends.
+
 v1.1.10
 - WoW Forever: right-click items in a fight even when you open your bags mid-fight. Your bag key and the minimap /
   Button Bin button open the bags through a secure toggle, and when a fight starts the use buttons are set over every
