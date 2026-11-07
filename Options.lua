@@ -76,7 +76,7 @@ function PB.ToggleOptions()
 		head(-192, "Look")
 		Check(opt, 16, -210, "Quality borders", "quality"); Check(opt, 190, -210, "Quest item marks", "quest")
 		Check(opt, 16, -232, "Item level on gear", "ilvl"); Check(opt, 190, -232, "Glow on new items", "newGlow")
-		Check(opt, 190, -254, "Fade junk", "dimJunk")
+		Check(opt, 16, -254, "Green arrow on upgrades", "upgradeArrow", "A green up arrow on gear that's better than what you wear (by Pint's Craft Upgrades' score, for your spec). Only gear you can put on now."); Check(opt, 190, -254, "Fade junk", "dimJunk")
 
 		head(-284, "Colour each bag")
 		Check(opt, 16, -302, "Colour slots by the bag they're in", "bagColors")

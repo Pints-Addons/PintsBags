@@ -62,7 +62,7 @@ local function BuyBankTab()
 	print("|cffd4a017Pint's Bags:|r click \"Buy bag slot\" at the top of the bank window to buy the next bag slot.")
 end
 local DEFAULTS = {
-	columns = 10, size = 37, view = "category", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false,
+	columns = 10, size = 37, view = "category", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false, upgradeArrow = true,
 	bagColors = false, colorStrength = 0.9, colors = {}, bagBar = false, replaceBags = true, replaceBank = true, gameSort = false,
 	locked = false, pos = {}, minimap = {}, curSlots = {},
 }
@@ -333,6 +333,26 @@ local function Decorate(b)
 	b.pbFreeText = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge"); b.pbFreeText:SetPoint("CENTER")
 	-- junk mark: a small coin in the top-right corner (grey items and Pint's Junk quick-list items)
 	b.pbJunk = b:CreateTexture(nil, "OVERLAY", nil, 7); b.pbJunk:SetSize(14, 14); b.pbJunk:SetPoint("TOPRIGHT", -1, -1); b.pbJunk:Hide()
+	-- an upgrade for you (by Pint's Craft Upgrades' score): a green up arrow in the bottom-right corner
+	-- (its own little frame: a dark outline behind and the arrow drawn twice over, so it reads solid on any icon).
+	-- The game's own green "upgrade" arrow where this client has it; otherwise the plain up arrow, stretched taller
+	-- (it's a flat arrowhead at its own shape)
+	local ATLAS = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("bags-greenarrow") and "bags-greenarrow"
+	local W, H = ATLAS and 18 or 16, ATLAS and 20 or 26
+	local up = CreateFrame("Frame", nil, b); up:SetSize(W, H); up:SetPoint("BOTTOMRIGHT", 1, ATLAS and 0 or -4)
+	up:SetFrameLevel(b:GetFrameLevel() + 3)
+	local function Art(t, r, g, bl, a)
+		if ATLAS then t:SetAtlas(ATLAS) else t:SetTexture("Interface\\Buttons\\Arrow-Up-Up") end
+		t:SetVertexColor(r, g, bl, a)
+	end
+	local sh = up:CreateTexture(nil, "ARTWORK", nil, 1); sh:SetSize(W + 4, H + 4); sh:SetPoint("CENTER", 0, -1)
+	Art(sh, 0, 0, 0, 0.9)
+	for k = 2, 3 do
+		local t = up:CreateTexture(nil, "ARTWORK", nil, k); t:SetAllPoints()
+		if ATLAS then Art(t, 1, 1, 1, 1) else Art(t, 0.15, 1, 0.15, 1) end
+	end
+	up:Hide()
+	b.pbUp = up
 	if b.IconBorder then b.IconBorder:SetAlpha(0) end
 end
 local function Icon(b) return b.icon or b.Icon or _G[(b:GetName() or "") .. "IconTexture"] end
@@ -573,6 +593,42 @@ end
 PB.JunkMark = JunkMark
 -- paint one slot. data = { link, count, quality, texture, locked, bound, quest = {isQuestItem, questID, isActive}, new }
 local BLUE_FRAME = 651080
+-- is this piece of gear an upgrade for you? (Pint's Craft Upgrades' score against what you wear; only gear you can
+-- put on now). Remembered per item until your gear or level changes.
+local upCache = {}
+local WEAR_TOP = { WARRIOR = 4, PALADIN = 4, HUNTER = 3, SHAMAN = 3, ROGUE = 2, DRUID = 2, PRIEST = 1, MAGE = 1, WARLOCK = 1 }
+local LATE_TOP = { WARRIOR = true, PALADIN = true, HUNTER = true, SHAMAN = true }   -- mail / plate come at 40
+local SHIELDS = { WARRIOR = true, PALADIN = true, SHAMAN = true }
+local function CanWearNow(link)
+	local _, _, _, _, minLevel, _, _, _, _, _, _, classID, subID = GetItemInfo(link)
+	local lvl = UnitLevel("player") or 1
+	if minLevel and minLevel > lvl then return false end
+	local _, cls = UnitClass("player")
+	if classID == 4 then                                   -- armour
+		if subID == 6 then return SHIELDS[cls] or false end
+		if subID and subID >= 1 and subID <= 4 then
+			local top = WEAR_TOP[cls] or 1
+			if LATE_TOP[cls] and lvl < 40 then top = top - 1 end
+			return subID <= top
+		end
+	end
+	return true
+end
+function PB.ClearUpgrades() wipe(upCache) end
+local function IsUpgrade(link)
+	local S = _G.CraftUpgradesScore
+	if not (S and S.Upgrade) then return false end
+	local v = upCache[link]
+	if v == nil then
+		v = false
+		if GetItemInfo(link) and CanWearNow(link) then
+			local ok, pct = pcall(S.Upgrade, link)
+			v = (ok and type(pct) == "number" and pct >= 1) or false
+			upCache[link] = v
+		end
+	end
+	return v
+end
 local function Paint(b, bag, d, search)
 	local icon, count = Icon(b), CountText(b)
 	if d and d.link then
@@ -602,6 +658,7 @@ local function Paint(b, bag, d, search)
 			b.pbJunk:Show()
 		else b.pbJunk:Hide() end
 		local gear = loc and loc ~= "" and loc ~= "INVTYPE_BAG" and loc ~= "INVTYPE_AMMO"
+		b.pbUp:SetShown((db.upgradeArrow ~= false and gear and IsUpgrade(d.link)) and true or false)
 		b.pbLevel:SetText((db.ilvl and gear and level and level > 1) and level or "")
 		local dim = not Matches(d.link, search, d.bound) or (db.dimJunk and quality == 0)
 		if SetItemButtonDesaturated then SetItemButtonDesaturated(b, d.locked or dim) end
@@ -609,7 +666,7 @@ local function Paint(b, bag, d, search)
 	else
 		if icon then icon:SetTexture(nil); icon:Hide() end
 		if SetItemButtonCount then SetItemButtonCount(b, 0) elseif count then count:SetText("") end
-		b.pbBack:Show(); b.pbGlow:Hide(); b.pbQuest:Hide(); b.pbNew:Hide(); b.pbJunk:Hide(); b.pbLevel:SetText("")
+		b.pbBack:Show(); b.pbGlow:Hide(); b.pbQuest:Hide(); b.pbNew:Hide(); b.pbJunk:Hide(); b.pbUp:Hide(); b.pbLevel:SetText("")
 		if b.pbTint then b.pbTint:SetShown(REAGENT ~= nil and bag == REAGENT) end
 		b:SetAlpha((search and search ~= "") and 0.3 or 1)
 	end
@@ -617,7 +674,7 @@ local function Paint(b, bag, d, search)
 	-- and a light edge in each bag's colour shows where one bag ends and the next begins
 	local nt = b.GetNormalTexture and b:GetNormalTexture()
 	-- every other piece of the game's slot art (whatever this client draws round the icon) follows the same rule
-	local mine = { [b.pbEdge] = true, [b.pbBack] = true, [b.pbTint or 0] = true, [b.pbGlow] = true, [b.pbQuest] = true, [b.pbNew] = true, [icon or 0] = true, [b.IconBorder or 0] = true }
+	local mine = { [b.pbEdge] = true, [b.pbBack] = true, [b.pbTint or 0] = true, [b.pbGlow] = true, [b.pbQuest] = true, [b.pbNew] = true,  [icon or 0] = true, [b.IconBorder or 0] = true }
 	local plain = db.view ~= "category"
 	for _, r in ipairs({ b:GetRegions() }) do
 		if r.GetTexture and not mine[r] and r ~= (b.GetHighlightTexture and b:GetHighlightTexture()) and r ~= (b.GetPushedTexture and b:GetPushedTexture()) then
@@ -1801,7 +1858,8 @@ local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "BAG_UPDATE_DELAYED", "ITEM_LOCK_CHANGED", "BAG_UPDATE_COOLDOWN", "PLAYER_MONEY",
 	"BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED", "QUEST_ACCEPTED", "QUEST_REMOVED",
 	"BANK_TABS_CHANGED", "BAG_CONTAINER_UPDATE",
-	"UNIT_QUEST_LOG_CHANGED", "GET_ITEM_INFO_RECEIVED", "BAG_NEW_ITEMS_UPDATED", "PLAYER_REGEN_ENABLED", "CURRENCY_DISPLAY_UPDATE" }) do pcall(ev.RegisterEvent, ev, e) end   -- (pcall: events this game version lacks are skipped)
+	"UNIT_QUEST_LOG_CHANGED", "GET_ITEM_INFO_RECEIVED", "BAG_NEW_ITEMS_UPDATED", "PLAYER_REGEN_ENABLED", "CURRENCY_DISPLAY_UPDATE",
+	"PLAYER_EQUIPMENT_CHANGED", "PLAYER_LEVEL_UP", "ACTIVE_TALENT_GROUP_CHANGED" }) do pcall(ev.RegisterEvent, ev, e) end   -- (pcall: events this game version lacks are skipped)
 local pending = false
 local function Soon()
 	if pending then return end
@@ -1826,6 +1884,8 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		if PB.BuildMinimap then PB.BuildMinimap() end
 		if PB.SecureOpener then C_Timer.After(2, function() pcall(PB.SecureOpener) end) end
 		if PB.BagnonLoaded() then Print("Bagnon is on too - /pbag off-bagnon to switch it off, then /reload.") end
+	elseif e == "PLAYER_EQUIPMENT_CHANGED" or e == "PLAYER_LEVEL_UP" or e == "ACTIVE_TALENT_GROUP_CHANGED" then
+		PB.ClearUpgrades(); Soon()               -- (what counts as an upgrade changed)
 	elseif e == "ITEM_LOCK_CHANGED" then
 		if a1 then RepaintBag(a1) end
 	elseif e == "BAG_UPDATE_COOLDOWN" then

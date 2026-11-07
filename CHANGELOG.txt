@@ -1,5 +1,9 @@
 Pint's Bags - Changelog
 
+v1.1.15
+- A green up arrow on gear that's an upgrade for you (with Pint's Craft Upgrades: its score for your spec against what
+  you wear). Only gear you can put on now. Option: "Green arrow on upgrades".
+
 v1.1.14
 - WoW Forever: Disenchant (and other spells used on an item) on a piece of gear in your bags disenchants it
   instead of putting it on.
