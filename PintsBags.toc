@@ -2,7 +2,7 @@
 ## Title: |cffd4a017Pint's|r Bags
 ## Notes: All your bags in one window, grouped by kind or as one big bag, with search, sort, a colour for each bag, the bank in its own window, and any character's bags and bank from anywhere (with Pint's Alts). /pbag
 ## Author: Jake (Pint's Add-ons, built with Claude)
-## Version: 1.1.12
+## Version: 1.1.13
 ## X-Curse-Project-ID: 1780999
 ## X-License: GPL-3.0
 ## SavedVariables: PintsBagsDB

@@ -383,6 +383,7 @@ local function AddUse(b, bag, slot)
 	o:SetScript("OnEnter", function() local f = b:GetScript("OnEnter"); if f then f(b) end end)
 	o:SetScript("OnLeave", function() local f = b:GetScript("OnLeave"); if f then f(b) end end)
 	b.pbUse = o
+	if PB.IsTargeting and PB.IsTargeting() then PB.TargetMode(o, true) end
 	-- a right-click that reached the slot itself in a fight did nothing (only a pinned use button can use an item):
 	-- say why, at most every few seconds
 	b:HookScript("OnMouseUp", function(self, btn)
@@ -402,6 +403,38 @@ local function AddUse(b, bag, slot)
 	Sync(b)
 end
 local function SyncAll() for _, b in pairs(liveButtons) do Sync(b) end end
+-- Using an item ON another item (a crate that takes Strange Dust, Disenchant, Pick Lock, a weapon stone...): the game
+-- waits for you to left-click the second item. Through the game's own slot code that left-click is blocked on WoW Forever
+-- ("PintsBags tried to call UseContainerItem"), so while it's waiting the use buttons take the left-click too.
+-- (Out of a fight only - the game won't let add-ons change these buttons in one.)
+local targeting = false
+local function TargetMode(o, on)
+	if on then
+		o:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp", "RightButtonDown")
+		o:SetAttribute("type1", "item"); o:SetAttribute("item1", o:GetAttribute("item2"))
+		if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "MiddleButton", "Button4", "Button5") end
+	else
+		o:RegisterForClicks("RightButtonUp", "RightButtonDown")
+		o:SetAttribute("type1", nil); o:SetAttribute("item1", nil)
+		if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "LeftButton", "MiddleButton", "Button4", "Button5") end
+	end
+end
+PB.TargetMode = TargetMode
+local function SetTargeting(on)
+	if on == targeting or InCombatLockdown() then return end
+	targeting = on
+	for _, b in pairs(liveButtons) do if b.pbUse then TargetMode(b.pbUse, on) end end
+end
+PB.IsTargeting = function() return targeting end
+if type(issecretvalue) == "function" and SpellIsTargeting then
+	local poll, acc = CreateFrame("Frame"), 0
+	poll:SetScript("OnUpdate", function(_, el)
+		acc = acc + el
+		if acc < 0.05 then return end
+		acc = 0
+		SetTargeting(SpellIsTargeting() and true or false)
+	end)
+end
 PB.AddPendingUse = function()
 	for b, bs in pairs(pendingUse) do pendingUse[b] = nil; AddUse(b, bs[1], bs[2]) end
 	SyncAll()

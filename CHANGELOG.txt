@@ -1,5 +1,9 @@
 Pint's Bags - Changelog
 
+v1.1.13
+- WoW Forever: using an item on another item in your bags (putting Strange Dust in a Waylaid Supplies crate,
+  Disenchant, Pick Lock, weapon stones) works again instead of "PintsBags has been blocked from an action".
+
 v1.1.12
 - WoW Forever: the bag opener on the minimap button now hides along with it (e.g. when Pint's Button Bin closes
   during a fight), so it no longer leaves an invisible clickable spot behind.
