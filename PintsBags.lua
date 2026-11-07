@@ -332,7 +332,10 @@ local function Decorate(b)
 	b.pbLevel = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.pbLevel:SetPoint("TOPLEFT", 2, -2)
 	b.pbFreeText = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge"); b.pbFreeText:SetPoint("CENTER")
 	-- junk mark: a small coin in the top-right corner (grey items and Pint's Junk quick-list items)
-	b.pbJunk = b:CreateTexture(nil, "OVERLAY", nil, 7); b.pbJunk:SetSize(14, 14); b.pbJunk:SetPoint("TOPRIGHT", -1, -1); b.pbJunk:Hide()
+	-- the junk coin (sold at the next vendor) sits on its own little frame: as a mark on the slot itself it was hidden
+	-- along with the game's slot art in the one-big-bag view
+	local jf = CreateFrame("Frame", nil, b); jf:SetSize(16, 16); jf:SetPoint("TOPRIGHT", 0, 0); jf:SetFrameLevel(b:GetFrameLevel() + 3)
+	b.pbJunk = jf:CreateTexture(nil, "OVERLAY", nil, 7); b.pbJunk:SetSize(15, 15); b.pbJunk:SetPoint("TOPRIGHT", -1, -1); b.pbJunk:Hide()
 	-- an upgrade for you (by Pint's Craft Upgrades' score): a green up arrow in the bottom-right corner
 	-- (its own little frame: a dark outline behind and the arrow drawn twice over, so it reads solid on any icon).
 	-- The game's own green "upgrade" arrow where this client has it; otherwise the plain up arrow, stretched taller

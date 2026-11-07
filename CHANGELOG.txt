@@ -1,5 +1,9 @@
 Pint's Bags - Changelog
 
+v1.1.16
+- Junk (grey items, and anything Pint's Junk sells) shows its gold coin in the top-right corner again - it was hidden
+  in the one-big-bag view.
+
 v1.1.15
 - A green up arrow on gear that's an upgrade for you (with Pint's Craft Upgrades: its score for your spec against what
   you wear). Only gear you can put on now. Option: "Green arrow on upgrades".
