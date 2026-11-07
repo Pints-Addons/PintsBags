@@ -411,11 +411,13 @@ local targeting = false
 local function TargetMode(o, on)
 	if on then
 		o:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp", "RightButtonDown")
-		o:SetAttribute("type1", "item"); o:SetAttribute("item1", o:GetAttribute("item2"))
+		-- (a "/use bag slot" macro, not the item action: the item action equips gear instead of using it, so Disenchant
+		-- on a piece of armour tried to put it on)
+		o:SetAttribute("type1", "macro"); o:SetAttribute("macrotext1", "/use " .. (o:GetAttribute("item2") or ""))
 		if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "MiddleButton", "Button4", "Button5") end
 	else
 		o:RegisterForClicks("RightButtonUp", "RightButtonDown")
-		o:SetAttribute("type1", nil); o:SetAttribute("item1", nil)
+		o:SetAttribute("type1", nil); o:SetAttribute("macrotext1", nil)
 		if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "LeftButton", "MiddleButton", "Button4", "Button5") end
 	end
 end
