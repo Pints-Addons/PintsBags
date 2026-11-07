@@ -400,8 +400,10 @@ local function AddUse(b, bag, slot)
 	local o = CreateFrame("Button", nil, useLayer, "SecureActionButtonTemplate")
 	o:Hide()
 	o:RegisterForClicks("RightButtonUp", "RightButtonDown")
-	o:SetAttribute("type2", "item")
-	o:SetAttribute("item2", bag .. " " .. slot)
+	-- right-click: "/use bag slot" (the game's own item action errors on an empty slot, "IsEquippableItem")
+	o:SetAttribute("type2", "macro")
+	o:SetAttribute("macrotext2", "/use " .. bag .. " " .. slot)
+	o.pbSlot = bag .. " " .. slot
 	if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "LeftButton", "MiddleButton", "Button4", "Button5") end
 	o:SetScript("OnEnter", function() local f = b:GetScript("OnEnter"); if f then f(b) end end)
 	o:SetScript("OnLeave", function() local f = b:GetScript("OnLeave"); if f then f(b) end end)
@@ -436,7 +438,7 @@ local function TargetMode(o, on)
 		o:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp", "RightButtonDown")
 		-- (a "/use bag slot" macro, not the item action: the item action equips gear instead of using it, so Disenchant
 		-- on a piece of armour tried to put it on)
-		o:SetAttribute("type1", "macro"); o:SetAttribute("macrotext1", "/use " .. (o:GetAttribute("item2") or ""))
+		o:SetAttribute("type1", "macro"); o:SetAttribute("macrotext1", "/use " .. (o.pbSlot or ""))
 		if o.SetPassThroughButtons then pcall(o.SetPassThroughButtons, o, "MiddleButton", "Button4", "Button5") end
 	else
 		o:RegisterForClicks("RightButtonUp", "RightButtonDown")

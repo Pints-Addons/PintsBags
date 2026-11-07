@@ -1,5 +1,8 @@
 Pint's Bags - Changelog
 
+v1.1.17
+- WoW Forever: right-clicking an empty bag slot no longer causes an "IsEquippableItem" error.
+
 v1.1.16
 - Junk (grey items, and anything Pint's Junk sells) shows its gold coin in the top-right corner again - it was hidden
   in the one-big-bag view.
