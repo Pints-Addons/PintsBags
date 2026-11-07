@@ -1,5 +1,11 @@
 Pint's Bags - Changelog
 
+v1.1.18
+- WoW Forever: "Bank of <character>..." away from the banker shows that character's saved bank tabs (it showed empty
+  slots). Needs Pint's Alts 1.6.3.
+- WoW Forever: other characters' bags and banks (and your saved bank) open again - they stopped on a missing game
+  template.
+
 v1.1.17
 - WoW Forever: right-clicking an empty bag slot no longer causes an "IsEquippableItem" error.
 

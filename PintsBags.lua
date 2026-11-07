@@ -126,6 +126,22 @@ PB.Matches = Matches
 ---------------------------------------------------------------- characters (Pint's Alts keeps everyone's bags and bank)
 local function LedgerChars() return PintsLedgerDB and PintsLedgerDB.chars and PintsLedgerDB.chars[REALM] or {} end
 local function LedgerRec(name) return LedgerChars()[name] end
+-- one of a character's saved bank containers (from Pint's Alts): by its container id, or for a bank saved before ids
+-- were kept, by where the old list put it (bank, then bank bags 5-10)
+local function SavedBank(rec, bag, i)
+	local t = rec and rec.bankSlots
+	if not t then return nil end
+	local legacy = false
+	for k, s in ipairs(t) do
+		if s.id then if s.id == bag then return s end
+		else legacy = true end
+	end
+	if not legacy then return nil end
+	local old = { -1 }
+	for b = (NUM_BAG_SLOTS or 4) + 1, (NUM_BAG_SLOTS or 4) + 6 do old[#old + 1] = b end
+	for k, b in ipairs(old) do if b == bag then return t[k] end end
+	return nil
+end
 
 ---------------------------------------------------------------- currencies (WoW Forever: Merchant's Favor, Honor Points...)
 -- Shown beside your gold: the currencies you ticked "Show on Backpack" for in the game's Currency tab, or Merchant's
@@ -575,7 +591,15 @@ local function OffButton(i)
 	local b = offButtons[i]
 	if b then return b end
 	offN = offN + 1
-	b = CreateFrame("Button", "PintsBagsOffline" .. offN, UIParent, "ItemButtonTemplate")
+	-- (WoW Forever has no ItemButtonTemplate: there an item button is its own frame type)
+	local hasTemplate = not (C_XMLUtil and C_XMLUtil.GetTemplateInfo) or C_XMLUtil.GetTemplateInfo("ItemButtonTemplate") ~= nil
+	if hasTemplate then b = CreateFrame("Button", "PintsBagsOffline" .. offN, UIParent, "ItemButtonTemplate")
+	else
+		local ok, f = pcall(CreateFrame, "ItemButton", "PintsBagsOffline" .. offN, UIParent)
+		b = ok and f or CreateFrame("Button", "PintsBagsOffline" .. offN, UIParent)
+		if not Icon(b) then b.icon = b:CreateTexture(nil, "BORDER"); b.icon:SetAllPoints() end
+		if not CountText(b) then b.Count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal"); b.Count:SetPoint("BOTTOMRIGHT", -2, 2) end
+	end
 	Decorate(b)
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	b:SetScript("OnEnter", function(self)
@@ -1262,7 +1286,7 @@ function PB.Refresh(w, force)
 		if bag == 0 then tex = "Interface\\Buttons\\Button-Backpack-Up"
 		elseif bag == BANK_ID then tex = "Interface\\Icons\\INV_Misc_Bag_10_Blue"
 		elseif offline then
-			local s = w.kind == "inv" and rec and rec.bagSlots and rec.bagSlots[bag] or (rec and rec.bankSlots and rec.bankSlots[i])
+			local s = w.kind == "inv" and rec and rec.bagSlots and rec.bagSlots[bag] or (w.kind ~= "inv" and SavedBank(rec, bag, i))
 			link = s and s.bag
 			tex = link and GetItemIcon and GetItemIcon(link)
 		elseif sb.tabN then
@@ -1313,7 +1337,7 @@ function PB.Refresh(w, force)
 	if offline then
 		local slotsTbl = rec and (w.kind == "inv" and rec.bagSlots or rec.bankSlots)
 		for i, bag in ipairs(w.bags) do
-			local s = slotsTbl and (w.kind == "inv" and slotsTbl[bag] or slotsTbl[i])
+			local s = slotsTbl and (w.kind == "inv" and slotsTbl[bag] or SavedBank(rec, bag, i))
 			if s then for slot = 1, (s.size or 0) do local d = s.slots and s.slots[slot]; list[#list + 1] = { bag = bag, slot = slot, d = d and { link = d[1], count = d[2], bound = d[3] } } end end
 		end
 	else
