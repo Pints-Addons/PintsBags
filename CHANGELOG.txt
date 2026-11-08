@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.19
+- A search no longer stays stuck fading items: a window opened later shows the search in its box (so you can clear
+  it), and closing all the bag windows ends the search.
+- New defaults: one big bag (not groups) and the bag slots bar shown. (Your own settings are kept.)
+
 v1.1.18
 - WoW Forever: "Bank of <character>..." away from the banker shows that character's saved bank tabs (it showed empty
   slots). Needs Pint's Alts 1.6.3.

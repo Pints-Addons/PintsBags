@@ -62,8 +62,8 @@ local function BuyBankTab()
 	print("|cffd4a017Pint's Bags:|r click \"Buy bag slot\" at the top of the bank window to buy the next bag slot.")
 end
 local DEFAULTS = {
-	columns = 10, size = 37, view = "category", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false, upgradeArrow = true,
-	bagColors = false, colorStrength = 0.9, colors = {}, bagBar = false, replaceBags = true, replaceBank = true, gameSort = false,
+	columns = 10, size = 37, view = "bags", lanes = 2, recent = true, groupSorted = false, combine = true, spacing = 3, scale = 1, quality = true, quest = true, ilvl = false, newGlow = true, dimJunk = false, upgradeArrow = true,
+	bagColors = false, colorStrength = 0.9, colors = {}, bagBar = true, replaceBags = true, replaceBank = true, gameSort = false,
 	locked = false, pos = {}, minimap = {}, curSlots = {},
 }
 local PALETTE = {
@@ -992,7 +992,13 @@ local function MakeWindow(kind)
 	end
 
 	w:SetScript("OnShow", function(self)
-		PlaySound(SOUNDKIT and SOUNDKIT.IG_BACKPACK_OPEN or 862); PB.Refresh(self)
+		PlaySound(SOUNDKIT and SOUNDKIT.IG_BACKPACK_OPEN or 862)
+		-- a search still running from another window: show it in this one's box too, so it can be seen and cleared
+		-- (a window opened later had an empty box but still faded everything that didn't match)
+		local q = PB.searchText or ""
+		if self.search:GetText() ~= q then self.search:SetText(q) end
+		self.search:SetShown(q ~= "")
+		PB.Refresh(self)
 		if self.kind == "inv" and PB.SyncUseLayer then PB.SyncUseLayer() end
 	end)
 	w:SetScript("OnHide", function(self)
@@ -1004,6 +1010,13 @@ local function MakeWindow(kind)
 			return
 		end
 		if self.kind == "inv" and PB.SyncUseLayer then C_Timer.After(0, PB.SyncUseLayer) end
+		-- every window closed: the search ends with them
+		local open = false
+		for _, ow in pairs(windows) do if ow ~= self and ow:IsShown() then open = true end end
+		if not open and (PB.searchText or "") ~= "" then
+			PB.searchText = ""
+			for _, ow in pairs(windows) do ow.search:SetText(""); ow.search:Hide() end
+		end
 		PlaySound(SOUNDKIT and SOUNDKIT.IG_BACKPACK_CLOSE or 863)
 		self.viewing = nil
 		if self.kind == "bank" and PB.atBank then
