@@ -628,13 +628,28 @@ local upCache = {}
 local WEAR_TOP = { WARRIOR = 4, PALADIN = 4, HUNTER = 3, SHAMAN = 3, ROGUE = 2, DRUID = 2, PRIEST = 1, MAGE = 1, WARLOCK = 1 }
 local LATE_TOP = { WARRIOR = true, PALADIN = true, HUNTER = true, SHAMAN = true }   -- mail / plate come at 40
 local SHIELDS = { WARRIOR = true, PALADIN = true, SHAMAN = true }
+-- weapons each class can use (item subclass: 0 1h axe, 1 2h axe, 2 bow, 3 gun, 4 1h mace, 5 2h mace, 6 polearm,
+-- 7 1h sword, 8 2h sword, 10 staff, 13 fist, 15 dagger, 16 thrown, 18 crossbow, 19 wand)
+local WEAPONS = {
+	WARRIOR = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 15, 16, 18 }, PALADIN = { 0, 1, 4, 5, 6, 7, 8 },
+	HUNTER = { 0, 1, 2, 3, 6, 7, 8, 10, 13, 15, 16, 18 }, ROGUE = { 2, 3, 4, 7, 13, 15, 16, 18 },
+	PRIEST = { 4, 10, 15, 19 }, SHAMAN = { 0, 1, 4, 5, 10, 13, 15 }, MAGE = { 7, 10, 15, 19 }, WARLOCK = { 7, 10, 15, 19 },
+	DRUID = { 4, 5, 10, 13, 15 },
+}
+local canWield
+local RELIC = { [7] = "PALADIN", [8] = "DRUID", [9] = "SHAMAN" }     -- librams, idols, totems
 local function CanWearNow(link)
 	local _, _, _, _, minLevel, _, _, _, _, _, _, classID, subID = GetItemInfo(link)
 	local lvl = UnitLevel("player") or 1
 	if minLevel and minLevel > lvl then return false end
 	local _, cls = UnitClass("player")
+	if classID == 2 and subID then                         -- weapons your class can't use (a wand on a shaman)
+		if not canWield then canWield = {}; for _, w in ipairs(WEAPONS[cls] or {}) do canWield[w] = true end; canWield[14], canWield[20] = true, true end
+		if not canWield[subID] then return false end
+	end
 	if classID == 4 then                                   -- armour
 		if subID == 6 then return SHIELDS[cls] or false end
+		if RELIC[subID] then return RELIC[subID] == cls end
 		if subID and subID >= 1 and subID <= 4 then
 			local top = WEAR_TOP[cls] or 1
 			if LATE_TOP[cls] and lvl < 40 then top = top - 1 end

@@ -1,5 +1,8 @@
 Pint's Bags - Changelog
 
+v1.1.20
+- The upgrade arrow no longer shows on weapons your class can't use (a wand on a shaman) or another class's relic.
+
 v1.1.19
 - A search no longer stays stuck fading items: a window opened later shows the search in its box (so you can clear
   it), and closing all the bag windows ends the search.
