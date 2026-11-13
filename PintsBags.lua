@@ -87,6 +87,9 @@ local function NumSlots(bag) return (C.GetContainerNumSlots and C.GetContainerNu
 local function SlotInfo(bag, slot) return C.GetContainerItemInfo and C.GetContainerItemInfo(bag, slot) end
 local function BagFamily(bag)
 	if bag == 0 or bag == BANK_ID then return 0 end
+	-- the reagent bag only takes reagents, but the game calls it an ordinary bag: kept apart, so sorting never tries to
+	-- put other things in it ("Only Reagents can be placed in Reagent Bags")
+	if REAGENT and bag == REAGENT then return -1 end
 	local _, family = C.GetContainerNumFreeSlots(bag)
 	return family or 0
 end
@@ -746,10 +749,10 @@ local function Paint(b, bag, d, search)
 				elseif r.pbAlpha ~= nil then
 					r:SetAlpha(r.pbAlpha); r.pbAlpha = nil
 				end
-				-- the blue slot frame (texture 651080): softened in the grouped view
+				-- the blue slot frame (texture 651080): gone in the grouped view too - blue there means a new item
 				if not plain and r:GetTexture() == BLUE_FRAME then
 					if r.pbBase == nil then r.pbBase = r:GetAlpha() end
-					r:SetAlpha(r.pbBase * (db.frameSoft or 0.55))
+					r:SetAlpha(0)
 				end
 			end
 		end
@@ -1305,7 +1308,10 @@ function PB.Refresh(w, force)
 	if InCombatLockdown() and (PB.fightLock or w:IsProtected()) then
 		-- mid-fight with pinned use buttons: nothing moves - just repaint what's in each slot; the full update waits for the end
 		for _, b in pairs(liveButtons) do
-			if b.pbWindow == w and b:IsVisible() and not w.offline then Paint(b, b.pbBag, LiveData(b.pbBag, b.pbSlot), PB.searchText); Cooldown(b, b.pbBag, b.pbSlot) end
+			if b.pbWindow == w and b:IsVisible() and not w.offline then
+				Paint(b, b.pbBag, LiveData(b.pbBag, b.pbSlot), PB.searchText); Cooldown(b, b.pbBag, b.pbSlot)
+				if b.pbMerged then local ct = CountText(b); if ct then ct:SetText(b.pbMerged[2]); ct:Show() end end
+			end
 		end
 		w.money.t:SetText(Money(GetMoney()))
 		PB.UpdateCurrencySlots(w, nil)
@@ -1413,7 +1419,16 @@ function PB.Refresh(w, force)
 	if db.view == "category" then PB.CategoryLayout(w, list, offline)
 	else
 		local size, gap, cols = Layout(w, #list)
-		for i, e in ipairs(list) do Place(e.b, i, size, gap, cols, w.grid); e.b:SetFrameLevel(w:GetFrameLevel() + 5); e.b:Show() end
+		for i, e in ipairs(list) do
+			-- (one big bag: every stack shows its own count - forget the grouped view's "several stacks as one" totals,
+			-- which otherwise came back on the next repaint and made the numbers jump about)
+			if e.b.pbMerged then
+				e.b.pbMerged = nil
+				local ct = CountText(e.b)
+				if ct then local n = e.d and e.d.count or 0; ct:SetText(n > 1 and n or "") end
+			end
+			Place(e.b, i, size, gap, cols, w.grid); e.b:SetFrameLevel(w:GetFrameLevel() + 5); e.b:Show()
+		end
 	end
 	w.free:SetText(("|cffffffff%d|r/%d free"):format(total - used, total))
 	w.money.t:SetText(offline and (rec and rec.money and Money(rec.money) or "") or Money(GetMoney()))
@@ -1917,7 +1932,12 @@ function PB.Sort(w)
 	if InCombatLockdown() then Print("can't sort in combat."); return end
 	if w.offline then return end
 	-- sorting files the new items away into their usual groups
-	if w.kind == "inv" and db.newItems then wipe(db.newItems); if PB.RefreshAll then C_Timer.After(0, PB.RefreshAll) end end
+	-- (the game's own "new" marks too, or the next look at the bags would put them straight back in New Items)
+	if w.kind == "inv" then
+		if C_NewItems and C_NewItems.ClearAll then pcall(C_NewItems.ClearAll) end
+		if db.newItems then wipe(db.newItems) end
+		if PB.RefreshAll then C_Timer.After(0, PB.RefreshAll) end
+	end
 	if w.kind == "bank" and not PB.atBank then return end
 	if db.gameSort then
 		if w.kind == "inv" and C.SortBags then C.SortBags(); return end
@@ -2060,6 +2080,26 @@ SlashCmdList.PINTSBAGS = function(msg)
 					b:GetFrameStrata(), b:GetFrameLevel(), b:GetAlpha(), b:GetWidth(), b:GetHeight(), tostring(b:GetLeft()), tostring(ic and ic:GetTexture()), tostring(b:GetParent() and b:GetParent():IsVisible())))
 			end
 		end
+	elseif msg == "art" then
+		-- every piece of art on the slot under the mouse, saved for Claude (what's drawing the blue)
+		local f = GetMouseFoci and GetMouseFoci()[1] or (GetMouseFocus and GetMouseFocus())
+		while f and not f.pbNew do f = f:GetParent() end
+		if not f then Print("hover an item in your bags, then type /pb art."); return end
+		local out = {}
+		local function Dump(fr, depth)
+			for _, r in ipairs({ fr:GetRegions() }) do
+				if r.GetTexture then
+					local cr, cg, cb, ca = r:GetVertexColor()
+					out[#out + 1] = ("%s%s tex=%s atlas=%s layer=%s shown=%s alpha=%.2f color=%.2f,%.2f,%.2f,%.2f blend=%s"):format(("  "):rep(depth),
+						tostring(r.GetDebugName and r:GetDebugName() or "?"), tostring(r:GetTexture()), tostring(r.GetAtlas and r:GetAtlas()), tostring(r:GetDrawLayer()),
+						tostring(r:IsShown()), r:GetAlpha() or 0, cr or 0, cg or 0, cb or 0, ca or 0, tostring(r.GetBlendMode and r:GetBlendMode()))
+				end
+			end
+			if depth < 2 then for _, c in ipairs({ fr:GetChildren() }) do out[#out + 1] = ("  "):rep(depth) .. "child " .. tostring(c.GetDebugName and c:GetDebugName() or "?"); Dump(c, depth + 1) end end
+		end
+		Dump(f, 0)
+		db.artProbe = out
+		Print(#out .. " pieces saved - /reload to write them out.")
 	elseif msg == "options" or msg == "config" then PB.ToggleOptions()
 	elseif msg == "" then PB.Toggle("inv")
 	else Print("/pbag - bags   /pbag bank - your saved bank   /pbag sort   /pbag options   /pbag minimap") end

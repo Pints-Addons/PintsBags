@@ -5,6 +5,10 @@ v1.1.21
   is easy to spot. Sorting (the broom) files it all away into its usual groups.
 - Grouped view: dragging an item shown as one (several stacks together) into the mail or a trade brings every stack;
   a right-click still adds just one stack.
+- WoW Forever: sorting no longer tries to put non-reagents into the reagent bag (it stalled with "Only Reagents can be
+  placed in Reagent Bags"); the reagent bag is sorted on its own. Sorting also clears the "new" marks.
+- Stack numbers no longer jump about: one big bag shows each stack's own count (the grouped view's totals were coming
+  back on repaints), and grouped totals stay put during a fight.
 
 v1.1.20
 - The upgrade arrow no longer shows on weapons your class can't use (a wand on a shaman) or another class's relic.
