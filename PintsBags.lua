@@ -572,6 +572,15 @@ local function LiveButton(bag, slot)
 		end)
 		b:SetScript("OnLeave", function() GameTooltip:Hide(); ResetCursor() end)
 	end
+	-- grouped view, several stacks shown as one: dragging it (or picking it up with a click) into the mail or the trade
+	-- window brings every stack along; a right-click still adds just the one stack
+	local function Grab(self)
+		if not self.pbMerged or CursorHasItem() then return end
+		local info = C.GetContainerItemInfo and C.GetContainerItemInfo(bag, slot)
+		if info and info.hyperlink then PB.dragAll = { link = info.hyperlink, t = GetTime(), bag = bag, slot = slot } end
+	end
+	b:HookScript("OnDragStart", Grab)
+	b:HookScript("PreClick", function(self, btn) if btn == "LeftButton" then Grab(self) else PB.dragAll = nil end end)
 	b:HookScript("OnEnter", function(self)
 		if C_NewItems and C_NewItems.IsNewItem and C_NewItems.IsNewItem(bag, slot) then C_NewItems.RemoveNewItem(bag, slot); self.pbNew:Hide() end
 		if PB.hoverFlash then PB.hoverFlash(self) end
@@ -767,8 +776,14 @@ local function LiveData(bag, slot)
 	local info = SlotInfo(bag, slot)
 	if not info or not info.hyperlink then return nil end
 	local q = C.GetContainerItemQuestInfo and C.GetContainerItemQuestInfo(bag, slot)
+	local new = C_NewItems and C_NewItems.IsNewItem and C_NewItems.IsNewItem(bag, slot)
+	-- (remembered for the grouped view's "New Items" group: it stays there until you sort, even after the game forgets)
+	if new and db and bag >= 0 and bag <= 5 then
+		local id = tonumber(info.hyperlink:match("item:(%d+)"))
+		if id then db.newItems = db.newItems or {}; db.newItems[id] = true end
+	end
 	return { link = info.hyperlink, count = info.stackCount, quality = info.quality, texture = info.iconFileID, locked = info.isLocked, bound = info.isBound,
-		quest = q, new = C_NewItems and C_NewItems.IsNewItem and C_NewItems.IsNewItem(bag, slot) }
+		quest = q, new = new }
 end
 local function Cooldown(b, bag, slot)
 	local cd = b.Cooldown or _G[(b:GetName() or "") .. "Cooldown"]
@@ -1119,7 +1134,7 @@ function PB.FreeTip(owner, family, w)
 end
 
 ---------------------------------------------------------------- grouped view: items sorted into kinds, in columns
-local CATS = { { "hearth", "Hearthstone" }, { "equip", "Equipment" }, { "cons", "Consumables" }, { "tools", "Profession Tools" }, { "cook", "Cooking" },
+local CATS = { { "new", "New Items" }, { "hearth", "Hearthstone" }, { "equip", "Equipment" }, { "cons", "Consumables" }, { "tools", "Profession Tools" }, { "cook", "Cooking" },
 	{ "trade", "Tradeskill" }, { "reagent", "Reagents" },
 	{ "recipe", "Recipes" }, { "quest", "Quest Items" }, { "ammo", "Ammo" }, { "bags", "Bags" }, { "keys", "Keys" }, { "misc", "Miscellaneous" },
 	{ "junk", "Junk" }, { "free", "Free space" } }
@@ -1152,6 +1167,8 @@ local PROF_TOOLS = {
 PB.PROF_TOOLS = PROF_TOOLS
 local function Category(d)
 	local id = tonumber(d.link:match("item:(%d+)"))
+	-- picked up since you last sorted (your bags only)
+	if id and db.newItems and db.newItems[id] and (d.bag == nil or (d.bag >= 0 and d.bag <= 5)) then return "new" end
 	if id == 6948 then return "hearth" end
 	if PROF_TOOLS[id] then return "tools" end
 	local _, _, _, _, _, cls, sub = GetItemInfoInstant(d.link)
@@ -1192,6 +1209,7 @@ function PB.CategoryLayout(w, list, offline)
 		if e.d and e.mergedAway then
 			-- shown as part of another stack
 		elseif e.d then
+			e.d.bag = e.bag
 			local c = Category(e.d)
 			buckets[c] = buckets[c] or {}
 			local k = SortKeyFor and SortKeyFor(e.d.link, e.d.count) or nil
@@ -1898,6 +1916,8 @@ sorter:SetScript("OnUpdate", function(_, e) acc = acc + e; if acc < 0.08 then re
 function PB.Sort(w)
 	if InCombatLockdown() then Print("can't sort in combat."); return end
 	if w.offline then return end
+	-- sorting files the new items away into their usual groups
+	if w.kind == "inv" and db.newItems then wipe(db.newItems); if PB.RefreshAll then C_Timer.After(0, PB.RefreshAll) end end
 	if w.kind == "bank" and not PB.atBank then return end
 	if db.gameSort then
 		if w.kind == "inv" and C.SortBags then C.SortBags(); return end
@@ -2110,4 +2130,44 @@ do
 		local store = db.minimap; store.hide = not store.hide
 		if btn and btn.lib then if store.hide then btn.lib:Hide(NAME) else btn.lib:Show(NAME) end elseif btn then btn:SetShown(not store.hide) end
 	end
+end
+
+---------------------------------------------------------------- all stacks of a grouped item into the mail / trade
+-- (after one stack of a dragged "several stacks as one" item lands in the mail or the trade window, the rest follow)
+do
+	local f = CreateFrame("Frame")
+	for _, e in ipairs({ "MAIL_SEND_INFO_UPDATE", "TRADE_PLAYER_ITEM_CHANGED" }) do pcall(f.RegisterEvent, f, e) end
+	f:SetScript("OnEvent", function(_, e)
+		local d = PB.dragAll
+		if not d or GetTime() - d.t > 8 or InCombatLockdown() then return end
+		-- did one of its stacks just land there?
+		local landed
+		if e == "MAIL_SEND_INFO_UPDATE" and GetSendMailItemLink then
+			for i = 1, (ATTACHMENTS_MAX_SEND or 12) do if GetSendMailItemLink(i) == d.link then landed = true end end
+		elseif e == "TRADE_PLAYER_ITEM_CHANGED" and GetTradePlayerItemLink then
+			for i = 1, 6 do if GetTradePlayerItemLink(i) == d.link then landed = true end end
+		end
+		if not landed then return end
+		PB.dragAll = nil
+		C_Timer.After(0.1, function()
+			local pick = C.PickupContainerItem or PickupContainerItem
+			for bg = 0, 4 do
+				for sl = 1, NumSlots(bg) do
+					local it = SlotInfo(bg, sl)
+					if it and it.hyperlink == d.link and not it.isLocked then
+						local free
+						if e == "MAIL_SEND_INFO_UPDATE" then
+							for i = 1, (ATTACHMENTS_MAX_SEND or 12) do if not GetSendMailItem(i) then free = i; break end end
+							if not free then return end
+							ClearCursor(); pick(bg, sl); ClickSendMailItemButton(free); ClearCursor()
+						else
+							for i = 1, 6 do if not GetTradePlayerItemLink(i) then free = i; break end end
+							if not free then return end
+							ClearCursor(); pick(bg, sl); ClickTradeButton(free); ClearCursor()
+						end
+					end
+				end
+			end
+		end)
+	end)
 end

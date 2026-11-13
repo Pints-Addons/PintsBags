@@ -1,5 +1,11 @@
 Pint's Bags - Changelog
 
+v1.1.21
+- Grouped view: a "New Items" group at the top holds everything you've picked up since you last sorted, so new loot
+  is easy to spot. Sorting (the broom) files it all away into its usual groups.
+- Grouped view: dragging an item shown as one (several stacks together) into the mail or a trade brings every stack;
+  a right-click still adds just one stack.
+
 v1.1.20
 - The upgrade arrow no longer shows on weapons your class can't use (a wand on a shaman) or another class's relic.
 
