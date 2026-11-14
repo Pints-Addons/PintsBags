@@ -47,3 +47,5 @@ LICENSE
 
 Pint's Bags - by Jake (Pint's Add-ons), built with Claude.
 World of Warcraft names and game data are the property of Blizzard Entertainment.
+
+Deposit all / Take all by group: at the bank, in the grouped view, click the arrow beside a group's name to move the whole group into the bank (from your bags) or out of it (from the bank).

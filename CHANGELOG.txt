@@ -1,5 +1,13 @@
 Pint's Bags - Changelog
 
+v1.1.22
+- At the bank, grouped view: an arrow beside each group's name. In your bags it deposits the whole group into the bank;
+  in the bank it takes the whole group out into your bags (like Pint's Postal's Take all). Click again to stop; sort
+  afterwards to restack.
+- Grouped view: trading or mailing an item shown as one (several stacks together) works stack after stack again - a
+  stack already in the trade or the mail shows on its own, so each right-click adds the next one, and dragging brings
+  all of them (it lost track of them on WoW Forever).
+
 v1.1.21
 - Grouped view: a "New Items" group at the top holds everything you've picked up since you last sorted, so new loot
   is easy to spot. Sorting (the broom) files it all away into its usual groups.

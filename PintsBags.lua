@@ -1185,6 +1185,91 @@ local function Category(d)
 	return CLASSCAT[classID or 15] or "misc"
 end
 PB.Category = Category
+
+---------------------------------------------------------------- deposit / take a whole group at the bank
+-- At the bank, every group in the grouped view gets an arrow by its name: in your bags it puts that whole group in the
+-- bank, in the bank it takes the whole group out into your bags. One stack at a time, into empty slots (Sort restacks).
+local mover
+local function ItemFamily(link) local ok, f = pcall(GetItemFamily, link); return ok and f or 0 end
+-- an empty slot on the other side that takes this item (a profession bag only takes its own kind)
+local function EmptyFor(bags, link)
+	local fam = ItemFamily(link)
+	for _, bag in ipairs(bags) do
+		if bag ~= BANK_ID or not TABS then
+			local bf = BagFamily(bag)
+			if bf == 0 or (fam and bit.band(fam, bf) ~= 0) then
+				for slot = 1, NumSlots(bag) do
+					local info = SlotInfo(bag, slot)
+					if not info then return bag, slot end
+				end
+			end
+		end
+	end
+end
+local function StopMover(msg)
+	if mover then mover.f:SetScript("OnUpdate", nil); mover = nil end
+	ClearCursor()
+	if msg then Print(msg) end
+	PB.RefreshAll()
+end
+function PB.MoveGroup(cat, toBank)
+	if mover then StopMover("stopped."); return end
+	if not PB.atBank then Print("open your bank first."); return end
+	if InCombatLockdown() then Print("not in a fight."); return end
+	local from, to = toBank and INV or BANK, toBank and BANK or INV
+	local queue = {}
+	for _, bag in ipairs(from) do
+		if bag ~= BANK_ID or not TABS then
+			for slot = 1, NumSlots(bag) do
+				local d = LiveData(bag, slot)
+				if d then d.bag = bag; if Category(d) == cat then queue[#queue + 1] = { bag, slot, d.link } end end
+			end
+		end
+	end
+	if #queue == 0 then Print("nothing to move."); return end
+	mover = { f = mover and mover.f or CreateFrame("Frame"), q = queue, i = 1, moved = 0, wait = 0, tries = 0 }
+	mover.f:SetScript("OnUpdate", function(_, el)
+		local m = mover
+		if not m then return end
+		m.wait = m.wait - el
+		if m.wait > 0 then return end
+		m.wait = 0.08
+		if not PB.atBank or InCombatLockdown() then StopMover("stopped - the bank closed or a fight started."); return end
+		local e = m.q[m.i]
+		if not e then StopMover(("moved %d stack%s %s."):format(m.moved, m.moved == 1 and "" or "s", toBank and "into the bank" or "into your bags")); return end
+		local info = SlotInfo(e[1], e[2])
+		if not info or info.hyperlink ~= e[3] then m.i = m.i + 1; return end        -- gone or changed: next
+		if info.isLocked or GetCursorInfo() then m.tries = m.tries + 1; if m.tries > 25 then m.i = m.i + 1; m.tries = 0 end; return end
+		local db2, ds = EmptyFor(to, e[3])
+		if not db2 then StopMover(("moved %d stack%s - %s is full."):format(m.moved, m.moved == 1 and "" or "s", toBank and "the bank" or "your bags")); return end
+		C.PickupContainerItem(e[1], e[2]); C.PickupContainerItem(db2, ds)
+		if GetCursorInfo() then ClearCursor() end
+		m.moved = m.moved + 1; m.i = m.i + 1; m.tries = 0
+	end)
+end
+local function GroupButton(w, i, h, cat, label)
+	w.hbtns = w.hbtns or {}
+	local b = w.hbtns[i]
+	if not b then
+		b = CreateFrame("Button", nil, w.grid); b:SetSize(16, 16)
+		b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		w.hbtns[i] = b
+	end
+	local toBank = w.kind == "inv"
+	b:SetNormalTexture(toBank and "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up" or "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+	b:ClearAllPoints(); b:SetPoint("LEFT", h, "RIGHT", 2, 0)
+	b:SetFrameLevel(w:GetFrameLevel() + 6)
+	b:SetScript("OnClick", function() PB.MoveGroup(cat, toBank) end)
+	b:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(toBank and ("Deposit all: " .. label) or ("Take all: " .. label))
+		GameTooltip:AddLine(toBank and "Puts every item in this group into your bank." or "Takes every item in this group out of the bank into your bags.", 1, 1, 1, true)
+		GameTooltip:AddLine("Click again to stop. Sort afterwards to restack.", 0.6, 0.8, 1, true)
+		GameTooltip:Show()
+	end)
+	b:Show()
+end
 local function Header(w, i)
 	local h = w.headers[i]
 	if not h then h = w.grid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); h:SetJustifyH("LEFT"); w.headers[i] = h end
@@ -1201,7 +1286,9 @@ function PB.CategoryLayout(w, list, offline)
 	local firstOf = {}
 	if db.combine then
 		for _, e in ipairs(list) do
-			if e.d and e.d.link then
+			-- (a stack already in the trade window or the mail - locked - shows on its own, so the one shown for the rest is
+			-- always one you can still right-click in: each right-click adds the next stack)
+			if e.d and e.d.link and not e.d.locked then
 				local f = firstOf[e.d.link]
 				if f then f.mTotal = f.mTotal + (e.d.count or 1); f.mStacks = f.mStacks + 1; e.mergedAway = true
 				else firstOf[e.d.link] = e; e.mTotal = e.d.count or 1; e.mStacks = 1 end
@@ -1246,6 +1333,7 @@ function PB.CategoryLayout(w, list, offline)
 			local count = 0
 			for _, e in ipairs(items) do count = count + ((cat[1] == "free") and (e.freeN or 1) or 1) end
 			h:SetText(cat[2] .. (cat[1] == "free" and "" or (" |cff888888" .. #items .. "|r")))
+			if PB.atBank and not offline and cat[1] ~= "free" and not InCombatLockdown() then GroupButton(w, hi, h, cat[1], cat[2]) end
 			for i, e in ipairs(items) do
 				local b = e.b
 				local col, row = (i - 1) % laneCols, math.floor((i - 1) / laneCols)
@@ -1416,6 +1504,7 @@ function PB.Refresh(w, force)
 		if e.family == 0 then total = total + 1; if e.d then used = used + 1 end end
 	end
 	for _, h in ipairs(w.headers) do h:Hide() end
+	for _, hb in ipairs(w.hbtns or {}) do hb:Hide() end
 	if db.view == "category" then PB.CategoryLayout(w, list, offline)
 	else
 		local size, gap, cols = Layout(w, #list)
@@ -1985,6 +2074,11 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		PB.ClearUpgrades(); Soon()               -- (what counts as an upgrade changed)
 	elseif e == "ITEM_LOCK_CHANGED" then
 		if a1 then RepaintBag(a1) end
+		-- grouped view with stacks shown as one: a stack going into (or out of) a trade or the mail splits off or joins back
+		if db.view == "category" and db.combine and not PB.lockSoon then
+			PB.lockSoon = true
+			C_Timer.After(0.15, function() PB.lockSoon = nil; for _, w in pairs(windows) do if w:IsShown() then PB.Refresh(w) end end end)
+		end
 	elseif e == "BAG_UPDATE_COOLDOWN" then
 		for _, bag in ipairs(INV) do RepaintBag(bag) end
 	elseif e == "BANKFRAME_OPENED" then
@@ -1995,9 +2089,9 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		end
 		PB.atBank = true
 		local b = PB.Window("bank"); b.viewing = nil; b:Show(); PB.Refresh(b)
-		PB.Open()
+		PB.Open(); PB.Refresh(PB.Window("inv"))
 	elseif e == "BANKFRAME_CLOSED" then
-		if PB.atBank then PB.atBank = false; if windows.bank then windows.bank:Hide() end end
+		if PB.atBank then PB.atBank = false; if windows.bank then windows.bank:Hide() end; if windows.inv then PB.Refresh(windows.inv) end end
 		if PB.RestashBlizzardBank then C_Timer.After(0.2, PB.RestashBlizzardBank) end
 	elseif e == "PLAYER_REGEN_ENABLED" then
 		PB.fightLock = false
@@ -2174,27 +2268,30 @@ end
 
 ---------------------------------------------------------------- all stacks of a grouped item into the mail / trade
 -- (after one stack of a dragged "several stacks as one" item lands in the mail or the trade window, the rest follow)
+-- (matched by item number: the trade window's and the mail's links aren't always written the same as the bag's)
+local function IdOf(link) return type(link) == "string" and tonumber(link:match("item:(%d+)")) or nil end
 do
 	local f = CreateFrame("Frame")
 	for _, e in ipairs({ "MAIL_SEND_INFO_UPDATE", "TRADE_PLAYER_ITEM_CHANGED" }) do pcall(f.RegisterEvent, f, e) end
 	f:SetScript("OnEvent", function(_, e)
 		local d = PB.dragAll
 		if not d or GetTime() - d.t > 8 or InCombatLockdown() then return end
+		d.id = d.id or IdOf(d.link)
 		-- did one of its stacks just land there?
 		local landed
 		if e == "MAIL_SEND_INFO_UPDATE" and GetSendMailItemLink then
-			for i = 1, (ATTACHMENTS_MAX_SEND or 12) do if GetSendMailItemLink(i) == d.link then landed = true end end
+			for i = 1, (ATTACHMENTS_MAX_SEND or 12) do if IdOf(GetSendMailItemLink(i)) == d.id then landed = true end end
 		elseif e == "TRADE_PLAYER_ITEM_CHANGED" and GetTradePlayerItemLink then
-			for i = 1, 6 do if GetTradePlayerItemLink(i) == d.link then landed = true end end
+			for i = 1, 6 do if IdOf(GetTradePlayerItemLink(i)) == d.id then landed = true end end
 		end
 		if not landed then return end
 		PB.dragAll = nil
 		C_Timer.After(0.1, function()
 			local pick = C.PickupContainerItem or PickupContainerItem
-			for bg = 0, 4 do
+			for _, bg in ipairs(INV) do
 				for sl = 1, NumSlots(bg) do
 					local it = SlotInfo(bg, sl)
-					if it and it.hyperlink == d.link and not it.isLocked then
+					if it and it.hyperlink and IdOf(it.hyperlink) == d.id and not it.isLocked then
 						local free
 						if e == "MAIL_SEND_INFO_UPDATE" then
 							for i = 1, (ATTACHMENTS_MAX_SEND or 12) do if not GetSendMailItem(i) then free = i; break end end
