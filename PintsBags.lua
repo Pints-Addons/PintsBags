@@ -1222,7 +1222,12 @@ function PB.MoveGroup(cat, toBank)
 		if bag ~= BANK_ID or not TABS then
 			for slot = 1, NumSlots(bag) do
 				local d = LiveData(bag, slot)
-				if d then d.bag = bag; if Category(d) == cat then queue[#queue + 1] = { bag, slot, d.link } end end
+				if d then
+					d.bag = bag
+					local c = Category(d)
+					-- ("all": everything but your hearthstone and profession tools)
+					if c == cat or (cat == "all" and c ~= "hearth" and c ~= "tools") then queue[#queue + 1] = { bag, slot, d.link } end
+				end
 			end
 		end
 	end
@@ -1246,6 +1251,47 @@ function PB.MoveGroup(cat, toBank)
 		if GetCursorInfo() then ClearCursor() end
 		m.moved = m.moved + 1; m.i = m.i + 1; m.tries = 0
 	end)
+end
+-- the bank's own column of groups, down its right side (any view): left-click deposits that group from your bags into
+-- the bank, right-click takes it out of the bank into your bags - like Pint's Postal's Take all / Attach all
+local STRIP = {
+	{ "all", "Everything", "Interface\\Icons\\INV_Misc_Bag_10" },
+	{ "new", "New Items", "Interface\\Icons\\INV_Misc_Gift_01" },
+	{ "equip", "Equipment", "Interface\\Icons\\INV_Chest_Chain_05" },
+	{ "cons", "Consumables", "Interface\\Icons\\INV_Potion_51" },
+	{ "cook", "Cooking", "Interface\\Icons\\INV_Misc_Food_15" },
+	{ "trade", "Tradeskill", "Interface\\Icons\\INV_Fabric_Linen_01" },
+	{ "reagent", "Reagents", "Interface\\Icons\\INV_Misc_Dust_02" },
+	{ "recipe", "Recipes", "Interface\\Icons\\INV_Scroll_03" },
+	{ "quest", "Quest Items", "Interface\\Icons\\INV_Misc_Note_01" },
+	{ "tools", "Profession Tools", "Interface\\Icons\\INV_Pick_02" },
+	{ "misc", "Miscellaneous", "Interface\\Icons\\INV_Misc_Gear_01" },
+	{ "junk", "Junk", "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01" },
+}
+function PB.BankStrip(w, show)
+	if not w then return end
+	if not w.strip then
+		w.strip = {}
+		for i, g in ipairs(STRIP) do
+			local b = CreateFrame("Button", nil, w)
+			b:SetSize(28, 28); b:SetPoint("TOPLEFT", w, "TOPRIGHT", 2, -8 - (i - 1) * 31)
+			b:SetNormalTexture(g[3]); b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+			b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+			b:SetScript("OnClick", function(_, btn) PB.MoveGroup(g[1], btn ~= "RightButton") end)
+			b:SetScript("OnEnter", function(self)
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:AddLine(g[2])
+				GameTooltip:AddLine("Left-click: Deposit all " .. g[2]:lower() .. " into the bank", 1, 1, 1, true)
+				GameTooltip:AddLine("Right-click: Take all " .. g[2]:lower() .. " out of the bank", 1, 1, 1, true)
+				if g[1] == "all" then GameTooltip:AddLine("(not your hearthstone or profession tools)", 0.6, 0.6, 0.6, true) end
+				GameTooltip:AddLine("Click again to stop. Sort afterwards to restack.", 0.6, 0.8, 1, true)
+				GameTooltip:Show()
+			end)
+			b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			w.strip[i] = b
+		end
+	end
+	for _, b in ipairs(w.strip) do b:SetShown(show and true or false) end
 end
 local function GroupButton(w, i, h, cat, label)
 	w.hbtns = w.hbtns or {}
@@ -2090,8 +2136,9 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		PB.atBank = true
 		local b = PB.Window("bank"); b.viewing = nil; b:Show(); PB.Refresh(b)
 		PB.Open(); PB.Refresh(PB.Window("inv"))
+		if not InCombatLockdown() then PB.BankStrip(b, true) end
 	elseif e == "BANKFRAME_CLOSED" then
-		if PB.atBank then PB.atBank = false; if windows.bank then windows.bank:Hide() end; if windows.inv then PB.Refresh(windows.inv) end end
+		if PB.atBank then PB.atBank = false; if windows.bank then PB.BankStrip(windows.bank, false); windows.bank:Hide() end; if windows.inv then PB.Refresh(windows.inv) end end
 		if PB.RestashBlizzardBank then C_Timer.After(0.2, PB.RestashBlizzardBank) end
 	elseif e == "PLAYER_REGEN_ENABLED" then
 		PB.fightLock = false

@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.23
+- At the bank: a column of group buttons down the right side of the bank window (any view): left-click deposits that
+  group from your bags into the bank, right-click takes it out into your bags - Everything, New Items, Equipment,
+  Consumables, Cooking, Tradeskill, Reagents, Recipes, Quest Items, Profession Tools, Miscellaneous, Junk.
+
 v1.1.22
 - At the bank, grouped view: an arrow beside each group's name. In your bags it deposits the whole group into the bank;
   in the bank it takes the whole group out into your bags (like Pint's Postal's Take all). Click again to stop; sort
