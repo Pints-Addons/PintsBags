@@ -1,5 +1,10 @@
 Pint's Bags - Changelog
 
+v1.1.24
+- Bank group buttons: depositing items you'd just taken out of the bank works - they were counted as New Items, not
+  their own group, so only some went back ("nothing to move"). And a group now moves in one click: it was filling the
+  same empty slot over and over before the game had caught up, so one stack went per click.
+
 v1.1.23
 - At the bank: a column of group buttons down the right side of the bank window (any view): left-click deposits that
   group from your bags into the bank, right-click takes it out into your bags - Everything, New Items, Equipment,

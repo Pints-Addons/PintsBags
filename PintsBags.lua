@@ -1168,10 +1168,10 @@ local PROF_TOOLS = {
 	[5060] = true,   -- Thieves' Tools
 }
 PB.PROF_TOOLS = PROF_TOOLS
-local function Category(d)
+local function Category(d, ignoreNew)
 	local id = tonumber(d.link:match("item:(%d+)"))
 	-- picked up since you last sorted (your bags only)
-	if id and db.newItems and db.newItems[id] and (d.bag == nil or (d.bag >= 0 and d.bag <= 5)) then return "new" end
+	if not ignoreNew and id and db.newItems and db.newItems[id] and (d.bag == nil or (d.bag >= 0 and d.bag <= 5)) then return "new" end
 	if id == 6948 then return "hearth" end
 	if PROF_TOOLS[id] then return "tools" end
 	local _, _, _, _, _, cls, sub = GetItemInfoInstant(d.link)
@@ -1192,7 +1192,7 @@ PB.Category = Category
 local mover
 local function ItemFamily(link) local ok, f = pcall(GetItemFamily, link); return ok and f or 0 end
 -- an empty slot on the other side that takes this item (a profession bag only takes its own kind)
-local function EmptyFor(bags, link)
+local function EmptyFor(bags, link, taken)
 	local fam = ItemFamily(link)
 	for _, bag in ipairs(bags) do
 		if bag ~= BANK_ID or not TABS then
@@ -1200,7 +1200,7 @@ local function EmptyFor(bags, link)
 			if bf == 0 or (fam and bit.band(fam, bf) ~= 0) then
 				for slot = 1, NumSlots(bag) do
 					local info = SlotInfo(bag, slot)
-					if not info then return bag, slot end
+					if not info and not (taken and taken[bag .. ":" .. slot]) then return bag, slot end
 				end
 			end
 		end
@@ -1224,7 +1224,8 @@ function PB.MoveGroup(cat, toBank)
 				local d = LiveData(bag, slot)
 				if d then
 					d.bag = bag
-					local c = Category(d)
+					-- (what it is, not "new": something just taken out of the bank sits in your bags as a new item)
+					local c = Category(d, cat ~= "new")
 					-- ("all": everything but your hearthstone and profession tools)
 					if c == cat or (cat == "all" and c ~= "hearth" and c ~= "tools") then queue[#queue + 1] = { bag, slot, d.link } end
 				end
@@ -1232,7 +1233,7 @@ function PB.MoveGroup(cat, toBank)
 		end
 	end
 	if #queue == 0 then Print("nothing to move."); return end
-	mover = { f = mover and mover.f or CreateFrame("Frame"), q = queue, i = 1, moved = 0, wait = 0, tries = 0 }
+	mover = { f = mover and mover.f or CreateFrame("Frame"), q = queue, i = 1, moved = 0, wait = 0, tries = 0, taken = {} }
 	mover.f:SetScript("OnUpdate", function(_, el)
 		local m = mover
 		if not m then return end
@@ -1245,10 +1246,17 @@ function PB.MoveGroup(cat, toBank)
 		local info = SlotInfo(e[1], e[2])
 		if not info or info.hyperlink ~= e[3] then m.i = m.i + 1; return end        -- gone or changed: next
 		if info.isLocked or GetCursorInfo() then m.tries = m.tries + 1; if m.tries > 25 then m.i = m.i + 1; m.tries = 0 end; return end
-		local db2, ds = EmptyFor(to, e[3])
+		-- (a slot just filled still looks empty until the game catches up: each target is used once)
+		local db2, ds = EmptyFor(to, e[3], m.taken)
 		if not db2 then StopMover(("moved %d stack%s - %s is full."):format(m.moved, m.moved == 1 and "" or "s", toBank and "the bank" or "your bags")); return end
 		C.PickupContainerItem(e[1], e[2]); C.PickupContainerItem(db2, ds)
-		if GetCursorInfo() then ClearCursor() end
+		m.taken[db2 .. ":" .. ds] = true
+		if GetCursorInfo() then
+			-- it didn't go: put it back and try this stack again in a moment (another empty slot)
+			ClearCursor(); m.tries = m.tries + 1; m.wait = 0.3
+			if m.tries > 25 then m.i = m.i + 1; m.tries = 0 end
+			return
+		end
 		m.moved = m.moved + 1; m.i = m.i + 1; m.tries = 0
 	end)
 end
