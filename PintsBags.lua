@@ -85,6 +85,24 @@ function PB.Tip(f, t) f:HookScript("OnEnter", function(s) GameTooltip:SetOwner(s
 local C = C_Container or {}
 local function NumSlots(bag) return (C.GetContainerNumSlots and C.GetContainerNumSlots(bag)) or 0 end
 local function SlotInfo(bag, slot) return C.GetContainerItemInfo and C.GetContainerItemInfo(bag, slot) end
+-- the keyring: bag -2 on Classic Era; on WoW Forever it's -1 (there's no old bank there). Shown in the bags window as one
+-- more bag when the key button is on
+local function KeyBag()
+	local tries = {}
+	if Enum and Enum.BagIndex and Enum.BagIndex.Keyring then tries[#tries + 1] = Enum.BagIndex.Keyring end
+	if KEYRING_CONTAINER then tries[#tries + 1] = KEYRING_CONTAINER end
+	tries[#tries + 1] = -2
+	if TABS then tries[#tries + 1] = -1 end
+	for _, id in ipairs(tries) do if NumSlots(id) > 0 then return id end end
+end
+local function InvBags()
+	local k = db and db.keys ~= false and KeyBag()
+	if not k then return INV end
+	local t = {}
+	for i, b in ipairs(INV) do t[i] = b end
+	t[#t + 1] = k
+	return t
+end
 local function BagFamily(bag)
 	if bag == 0 or bag == BANK_ID then return 0 end
 	-- the reagent bag only takes reagents, but the game calls it an ordinary bag: kept apart, so sorting never tries to
@@ -934,10 +952,16 @@ local function MakeWindow(kind)
 	w.close:SetScript("OnClick", function() w:Hide() end)
 	w.optBtn = Btn(w, "Interface\\Icons\\INV_Misc_Gear_01", "Options", function() PB.ToggleOptions() end)
 	w.optBtn:SetPoint("RIGHT", w.close, "LEFT", -2, 0)
+	-- your keys (the keyring), shown as one more bag
+	if kind == "inv" then
+		w.keyBtn = Btn(w, "Interface\\Icons\\INV_Misc_Key_14", function() return db.keys ~= false and "Showing your keyring - click to hide it" or "Show your keyring" end,
+			function() db.keys = (db.keys == false); PB.Refresh(w) end)
+		w.keyBtn:SetPoint("RIGHT", w.optBtn, "LEFT", -4, 0)
+	end
 
 	-- search box over the title
 	w.search = CreateFrame("EditBox", nil, w, "InputBoxTemplate")
-	w.search:SetHeight(20); w.search:SetPoint("LEFT", w.viewBtn, "RIGHT", 10, 0); w.search:SetPoint("RIGHT", w.optBtn, "LEFT", -8, 0)
+	w.search:SetHeight(20); w.search:SetPoint("LEFT", w.viewBtn, "RIGHT", 10, 0); w.search:SetPoint("RIGHT", w.keyBtn or w.optBtn, "LEFT", -8, 0)
 	w.search:SetAutoFocus(false); w.search:Hide()
 	w.search:SetScript("OnTextChanged", function(self) PB.searchText = self:GetText(); for _, ow in pairs(windows) do if ow ~= w and ow.search:GetText() ~= PB.searchText then ow.search:SetText(PB.searchText); ow.search:SetShown(PB.searchText ~= "") end; PB.Refresh(ow) end end)
 	w.search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus(); self:Hide() end)
@@ -1446,6 +1470,7 @@ end
 
 function PB.Refresh(w, force)
 	if not w or (not w:IsShown() and not force) or not db then return end
+	if w.kind == "inv" and not InCombatLockdown() then w.bags = InvBags() end
 	-- (in a fight the window can be locked by the game - its secure parts - even without pinned use buttons: then only repaint)
 	if InCombatLockdown() and (PB.fightLock or w:IsProtected()) then
 		-- mid-fight with pinned use buttons: nothing moves - just repaint what's in each slot; the full update waits for the end
