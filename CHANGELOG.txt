@@ -1,5 +1,9 @@
 Pint's Bags - Changelog
 
+v1.1.26
+- Your own saved bank (opened away from the banker) shows the gold and currencies you have now, not the ones from
+  when the bank was saved.
+
 v1.1.24
 - Bank group buttons: depositing items you'd just taken out of the bank works - they were counted as New Items, not
   their own group, so only some went back ("nothing to move"). And a group now moves in one click: it was filling the

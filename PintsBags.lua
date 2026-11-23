@@ -1599,8 +1599,10 @@ function PB.Refresh(w, force)
 		end
 	end
 	w.free:SetText(("|cffffffff%d|r/%d free"):format(total - used, total))
-	w.money.t:SetText(offline and (rec and rec.money and Money(rec.money) or "") or Money(GetMoney()))
-	PB.UpdateCurrencySlots(w, offline and rec or nil)
+	-- (your own saved bank: gold and currencies are what you have now, not what they were when the bank was saved)
+	local mine = who == ME
+	w.money.t:SetText((offline and not mine) and (rec and rec.money and Money(rec.money) or "") or Money(GetMoney()))
+	PB.UpdateCurrencySlots(w, (offline and not mine) and rec or nil)
 	w.sortBtn:SetEnabled(not offline and (w.kind == "inv" or PB.atBank))
 	w.sortBtn.tex:SetDesaturated(offline or (w.kind == "bank" and not PB.atBank))
 end
