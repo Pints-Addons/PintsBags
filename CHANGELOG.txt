@@ -1,5 +1,11 @@
 Pint's Bags - Changelog
 
+v1.1.27
+- Hunters can't use thrown weapons (warriors and rogues only): thrown weapons are no longer suggested or counted as
+  usable for hunters.
+- WoW Forever: other characters' bags, bank and gold are found even when the game reported the realm as blank at
+  load time.
+
 v1.1.26
 - Your own saved bank (opened away from the banker) shows the gold and currencies you have now, not the ones from
   when the bank was saved.

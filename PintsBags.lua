@@ -76,7 +76,13 @@ if REAGENT then PALETTE[REAGENT] = { 0.92, 0.90, 0.82 } end
 PB.PALETTE = PALETTE
 local db
 local SortKeyFor, SortBefore          -- set in the sorting section
-local ME, REALM = (GetUnitName and GetUnitName("player", false) or UnitName("player")), GetRealmName()
+-- (the realm, asked when needed: WoW Forever can name it blank at load time - then Pint's Alts' last realm stands in)
+local function RealmNow()
+	local r = GetRealmName and GetRealmName()
+	if type(r) == "string" and r ~= "" and not (type(issecretvalue) == "function" and issecretvalue(r)) then return r end
+	return (PintsLedgerDB and PintsLedgerDB.lastRealm) or ""
+end
+local ME = (GetUnitName and GetUnitName("player", false) or UnitName("player"))
 local function Print(m) print("|cffd4a017Pint's Bags:|r " .. m) end
 PB.Print = Print
 function PB.Tip(f, t) f:HookScript("OnEnter", function(s) GameTooltip:SetOwner(s, "ANCHOR_TOP"); GameTooltip:AddLine(t, 1, 1, 1, true); GameTooltip:Show() end); f:HookScript("OnLeave", function() GameTooltip:Hide() end) end
@@ -145,7 +151,7 @@ end
 PB.Matches = Matches
 
 ---------------------------------------------------------------- characters (Pint's Alts keeps everyone's bags and bank)
-local function LedgerChars() return PintsLedgerDB and PintsLedgerDB.chars and PintsLedgerDB.chars[REALM] or {} end
+local function LedgerChars() return PintsLedgerDB and PintsLedgerDB.chars and PintsLedgerDB.chars[RealmNow()] or {} end
 local function LedgerRec(name) return LedgerChars()[name] end
 -- one of a character's saved bank containers (from Pint's Alts): by its container id, or for a bank saved before ids
 -- were kept, by where the old list put it (bank, then bank bags 5-10)
@@ -662,7 +668,7 @@ local SHIELDS = { WARRIOR = true, PALADIN = true, SHAMAN = true }
 -- 7 1h sword, 8 2h sword, 10 staff, 13 fist, 15 dagger, 16 thrown, 18 crossbow, 19 wand)
 local WEAPONS = {
 	WARRIOR = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 15, 16, 18 }, PALADIN = { 0, 1, 4, 5, 6, 7, 8 },
-	HUNTER = { 0, 1, 2, 3, 6, 7, 8, 10, 13, 15, 16, 18 }, ROGUE = { 2, 3, 4, 7, 13, 15, 16, 18 },
+	HUNTER = { 0, 1, 2, 3, 6, 7, 8, 10, 13, 15, 18 }, ROGUE = { 2, 3, 4, 7, 13, 15, 16, 18 },
 	PRIEST = { 4, 10, 15, 19 }, SHAMAN = { 0, 1, 4, 5, 10, 13, 15 }, MAGE = { 7, 10, 15, 19 }, WARLOCK = { 7, 10, 15, 19 },
 	DRUID = { 4, 5, 10, 13, 15 },
 }
@@ -1009,7 +1015,7 @@ local function MakeWindow(kind)
 	w.money.t = w.money:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); w.money.t:SetPoint("RIGHT")
 	w.money:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-		GameTooltip:AddLine("Gold on " .. REALM)
+		GameTooltip:AddLine("Gold on " .. RealmNow())
 		local total, list = 0, {}
 		for n, rec in pairs(LedgerChars()) do local m = (n == ME) and GetMoney() or rec.money or 0; total = total + m; list[#list + 1] = { n, m, rec.classFile } end
 		if #list == 0 then list[1] = { ME, GetMoney(), select(2, UnitClass("player")) }; total = GetMoney() end
