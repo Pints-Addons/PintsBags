@@ -668,7 +668,7 @@ local SHIELDS = { WARRIOR = true, PALADIN = true, SHAMAN = true }
 -- 7 1h sword, 8 2h sword, 10 staff, 13 fist, 15 dagger, 16 thrown, 18 crossbow, 19 wand)
 local WEAPONS = {
 	WARRIOR = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 15, 16, 18 }, PALADIN = { 0, 1, 4, 5, 6, 7, 8 },
-	HUNTER = { 0, 1, 2, 3, 6, 7, 8, 10, 13, 15, 18 }, ROGUE = { 2, 3, 4, 7, 13, 15, 16, 18 },
+	HUNTER = { 0, 1, 2, 3, 6, 7, 8, 10, 13, 15, 16, 18 }, ROGUE = { 2, 3, 4, 7, 13, 15, 16, 18 },
 	PRIEST = { 4, 10, 15, 19 }, SHAMAN = { 0, 1, 4, 5, 10, 13, 15 }, MAGE = { 7, 10, 15, 19 }, WARLOCK = { 7, 10, 15, 19 },
 	DRUID = { 4, 5, 10, 13, 15 },
 }
